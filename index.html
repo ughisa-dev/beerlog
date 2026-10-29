@@ -168,8 +168,8 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
 .photo-box img{width:100%;height:100%;object-fit:cover;display:block}
 .photo-box span{padding:6px}
 .photo-btns{display:flex;flex-direction:column;gap:8px}
-.dt-photo{margin:0 0 12px;border-radius:18px;overflow:hidden;background:var(--card)}
-.dt-photo img{display:block;width:100%;max-height:70vh;object-fit:contain;-webkit-touch-callout:default}
+.dt-photo{margin:0 0 12px;display:flex;justify-content:center}
+.dt-photo img{display:block;max-width:50%;max-height:35vh;border-radius:12px;object-fit:contain;-webkit-touch-callout:default}
 .save-err{margin-bottom:10px}
 .save-to{font-size:13px;color:var(--sub);text-align:center;margin-bottom:10px;line-height:1.5}
 .foot-row{display:flex;gap:12px;align-items:center}
@@ -468,8 +468,8 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
  <svg id="dtRadar" class="radar" viewBox="-215 -165 430 330" role="img" aria-label="味わいレーダーチャート"></svg>
  <div class="legend" id="dtLegend"></div>
  <div class="tiles4" id="dtTiles"></div>
- <div class="dt-photo hidden" id="dtPhoto"><img id="dtPhotoImg" alt="写真"></div>
  <div class="card kv" id="dtKV"></div>
+ <div class="dt-photo hidden" id="dtPhoto"><img id="dtPhotoImg" alt="写真"></div>
  <div class="dt-actions">
   <button class="ghost block" id="dtSimilar">似ているビール（同じクラスタ）を見る</button>
   <button class="ghost block" id="dtAgain">同じビールをもう一度記録</button>
