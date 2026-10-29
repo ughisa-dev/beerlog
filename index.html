@@ -69,7 +69,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px #F0A9
 
 /* ---- 画面の切り替え（iPhone） ---- */
 .view{display:none;padding:max(20px,env(safe-area-inset-top)) 20px calc(120px + env(safe-area-inset-bottom))}
-body[data-view=list] #vList,body[data-view=editor] #vEditor,body[data-view=detail] #vDetail,body[data-view=settings] #vSettings{display:block}
+body[data-view=list] #vList,body[data-view=editor] #vEditor,body[data-view=detail] #vDetail,body[data-view=settings] #vSettings,body[data-view=charts] #vCharts{display:block}
 #banner{position:sticky;top:0;z-index:30;padding:max(8px,env(safe-area-inset-top)) 16px 0;background:linear-gradient(var(--bg) 70%,transparent)}
 #banner .msg{margin:0 0 8px}
 .bottom-bar{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:14px 20px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 22%)}
@@ -252,6 +252,19 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
 .picker-item svg{color:var(--sub)}
 .picker-empty{padding:20px;text-align:center;color:var(--sub);font-size:14px}
 
+/* ---- 分析の図 ---- */
+.head-btns{display:flex;gap:10px}
+.chart-sec{margin-bottom:24px}
+.chart-head{display:flex;align-items:center;gap:8px;margin:0 2px 8px}
+.chart-head b{font-size:16px}
+.chart-head .sp{flex:1}
+.chart-head .btn-s{min-height:40px;padding:0 12px;font-size:13px}
+.chart-box{background:#fff;border-radius:14px;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.chart-box img{display:block;width:100%;height:auto;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+.chart-box.dendro.zoomed{height:min(62vh,560px)}
+.chart-box.dendro.zoomed img{width:auto;height:100%;max-width:none}
+.chart-box.pca.zoomed img{width:300%;max-width:none}
+.chart-wait{padding:48px 16px;text-align:center;color:#6b6157;font-size:14px}
 #toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2D2419;border:1px solid var(--line);color:var(--fg);padding:10px 18px;border-radius:999px;font-size:14px;z-index:80;max-width:90vw;text-align:center}
 
 /* ---- Mac／Windows（幅 900px 以上） ---- */
@@ -264,7 +277,7 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
  body #vList{display:block;grid-column:1;grid-row:1/span 3;position:sticky;top:0;height:100vh;overflow:auto;border-right:1px solid var(--line2);padding:24px 20px 24px}
  body[data-view=detail] #vDetail{display:none}
  body[data-view=list] #vEditor,body[data-view=detail] #vEditor{display:block}
- #vEditor,#vSettings{grid-column:2;grid-row:2;padding:30px 40px 60px;min-width:0}
+ #vEditor,#vSettings,#vCharts{grid-column:2;grid-row:2;padding:30px 40px 60px;min-width:0}
  .list-head{padding-top:4px}
  .list-head h1{font-size:28px}
  .sync{margin:12px 0 16px;font-size:12.5px}
@@ -334,7 +347,8 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
 <section id="vList" class="view">
  <header class="list-head">
   <div><div class="eyebrow">BEER LOG</div><h1><span class="num" id="countNum">0</span> <span class="ja">杯の記録</span></h1></div>
-  <button class="gear" id="settingsBtn" aria-label="保存先とExcel設定"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  <div class="head-btns"><button class="gear" id="chartsBtn" aria-label="分析の図（樹形図・PCAマップ）"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><circle cx="8" cy="14" r="1.6"/><circle cx="12.5" cy="9" r="1.6"/><circle cx="17" cy="12.5" r="1.6"/><circle cx="18.5" cy="6" r="1.6"/></svg></button>
+  <button class="gear" id="settingsBtn" aria-label="保存先とExcel設定"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
  </header>
  <div class="sync" id="syncLine"><span class="dot"></span><span id="syncText">未接続</span></div>
  <button class="primary wide-only" id="newBtnWide"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>新しく記録</button>
@@ -492,6 +506,17 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
  </div>
  <input id="fileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
 
+ <div class="sec"><span>クラスタ分析</span><span>Python版と同じ計算</span></div>
+ <div class="group">
+  <div class="it"><span class="main"><b>現在の結果</b><span id="anaSummary">ファイル未読み込み</span></span></div>
+  <div class="pad">
+   <button class="btn-s acc" id="anaBtn" style="width:100%">分析を再生成してExcelに保存</button>
+   <button class="btn-s" id="anaView" style="width:100%;margin-top:8px">樹形図・PCAマップを見る</button>
+   <div id="anaMsg" class="msg hidden"></div>
+  </div>
+ </div>
+ <p class="note">「入力」シートから、<strong>クラスタ結果（5群）・Bertin図ビュー（クラスタ順）</strong>の表と、<strong>樹形図・Bertin図・PCAプロット</strong>の画像を作り直します（<code>再生成_クラスタ解析_v4_radar.py</code> と同じ計算）。画像の位置と大きさは今のままです。iPhone では PCA の画像を少し低い解像度で作ります。アプリの一覧・詳細のクラスタは、ここを実行しなくても常に最新の記録で計算しています。</p>
+
  <div class="sec"><span>「入力」シートの列</span><span>既存 A–Q は変更しない</span></div>
  <div class="group cols">
   <div><span>A</span><span>ビール名</span></div>
@@ -505,6 +530,20 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
   <div class="new"><span>AB</span><span>記録ID（編集・同期用）</span></div>
  </div>
  <p class="note" id="dataNote"></p>
+</section>
+
+<!-- ============ 分析の図 ============ -->
+<section id="vCharts" class="view">
+ <div class="set-head"><button class="icon-btn" id="chBack" aria-label="戻る"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><h2>分析の図</h2><span></span></div>
+ <p class="note" id="chNote"></p>
+ <div class="chart-sec">
+  <div class="chart-head"><b>樹形図</b><span class="sp"></span><button class="btn-s" data-zoom="dendro">全体を表示</button><button class="btn-s" data-save="dendro">共有・保存</button></div>
+  <div class="chart-box dendro zoomed" id="boxDendro"><img id="imgDendro" alt="樹形図（階層クラスタリング）"></div>
+ </div>
+ <div class="chart-sec">
+  <div class="chart-head"><b>PCA 2次元マップ</b><span class="sp"></span><button class="btn-s" data-zoom="pca">拡大して表示</button><button class="btn-s" data-save="pca">共有・保存</button></div>
+  <div class="chart-box pca" id="boxPca"><img id="imgPca" alt="PCA 2次元マップ"></div>
+ </div>
 </section>
 
 <!-- 数値の直接入力シート -->
@@ -600,25 +639,114 @@ function parseBook(buf){
   for(const f of FIELDS)if(f.type==='s'&&f.key!=='beer')rec[f.key]=toStr(cell(f.col,r));
   records.push(rec);
  }
- const clusters=parseClusters(wb,records);
- return {records,headers,dateKinds,clusters};
+ let analysis=null;
+ try{analysis=computeAnalysis(wb)}catch(e){console.warn('分析の計算に失敗',e)}
+ const clusters=attachClusters(analysis,records);
+ return {records,headers,dateKinds,clusters,analysis};
 }
-// 分析スクリプトが書いた「クラスタ結果（5群）」を入力行の順に対応づける（解析後に追加した記録は対象外）
-function parseClusters(wb,records){
- const ws=wb.Sheets['クラスタ結果（5群）'];if(!ws)return null;
- const list=[];
- for(let r=4;;r++){const a=ws['A'+r],b=ws['B'+r];if(!a||a.v==null||a.v==='')break;const k=toNum(b&&b.v);if(k==null)break;list.push({name:String(a.v),k})}
- if(!list.length)return null;
- let i=0;
- for(const rec of records){
-  if(rec.v.every(x=>x==null))continue;
-  if(i<list.length&&list[i].name===rec.beer){rec.cluster=list[i].k;i++;continue}
-  for(let j=i+1;j<Math.min(list.length,i+6);j++)if(list[j].name===rec.beer){rec.cluster=list[j].k;i=j+1;break}
- }
+// アプリ内で計算したクラスタを各記録に付け、クラスタごとの平均（元の 0〜10 の値）を出す
+function attachClusters(A,records){
+ if(!A)return null;
+ const byRow=new Map(A.rows.map((r,i)=>[r,A.clusters[i]]));
+ for(const rec of records)rec.cluster=byRow.get(rec.row);
  const avg={};
  for(const rec of records){if(rec.cluster==null)continue;const a=avg[rec.cluster]||(avg[rec.cluster]={n:0,sum:Array(12).fill(0),cnt:Array(12).fill(0)});a.n++;rec.v.forEach((x,j)=>{if(x!=null){a.sum[j]+=x;a.cnt[j]++}})}
  for(const k in avg)avg[k].mean=avg[k].sum.map((s,j)=>avg[k].cnt[j]?s/avg[k].cnt[j]:0);
- return {count:list.length,avg};
+ const sizes={};for(const k of A.clusters)sizes[k]=(sizes[k]||0)+1;
+ return {count:A.names.length,avg,sizes,explained:A.pca.explained,weights:A.weights};
+}
+
+/* ---- クラスタ解析（再生成_クラスタ解析_v4_radar.py と同じ計算） ---- */
+const N_CLUSTERS=5;
+const ANALYSIS_SHEETS={result:'クラスタ結果（5群）',bertin:'Bertin図ビュー（クラスタ順）',weights:'重み（任意）',dendro:'樹形図（行クラスタ）',bertinImg:'Bertin図（画像）',pca:'PCAプロット'};
+// Python の float() に合わせる（変換できなければ NaN）
+function pyFloat(x){if(x==null||x==='')return NaN;if(typeof x==='boolean')return x?1:0;if(typeof x==='number')return x;const s=String(x).trim();if(s==='')return NaN;const f=Number(s);return Number.isFinite(f)?f:NaN}
+function computeAnalysis(wb){
+ const ws=wb.Sheets[SHEET_NAME];
+ const rg=XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+ const val=(c,r)=>{const x=ws[XLSX.utils.encode_cell({c,r:r-1})];return x?x.v:null};
+ // read_input：ビール名が空、または12項目がすべて空の行は除く
+ const names=[],rows=[],X=[],overall=[];
+ for(let r=2;r<=rg.e.r+1;r++){
+  const name=val(0,r);if(!name)continue;
+  const row=[];let empty=true;
+  for(let c=1;c<=12;c++){const x=val(c,r);if(x!=null&&x!=='')empty=false;row.push(pyFloat(x))}
+  if(empty)continue;
+  names.push(name);rows.push(r);X.push(row);overall.push(pyFloat(val(13,r)));
+ }
+ const n=names.length;if(n<2)return null;
+ // read_weights：「重み（任意）」の3行目（なければ 1）
+ const wws=wb.Sheets[ANALYSIS_SHEETS.weights];
+ const weights=FLAVORS.map((_,j)=>{const c=wws&&wws[XLSX.utils.encode_cell({c:j,r:2})];if(!c||c.v==null||c.v==='')return 1;const f=pyFloat(c.v);return Number.isNaN(f)?1:Math.max(0,f)});
+ // fill_and_scale：列平均で欠損を埋め、標準化（母標準偏差）してから重みを掛ける
+ const Xw=X.map(r=>r.slice());
+ for(let j=0;j<12;j++){
+  let s=0,c=0;for(const r of Xw)if(!Number.isNaN(r[j])){s+=r[j];c++}
+  const fill=s/c;for(const r of Xw)if(Number.isNaN(r[j]))r[j]=fill;
+  let mu=0;for(const r of Xw)mu+=r[j];mu/=n;
+  let q=0;for(const r of Xw)q+=(r[j]-mu)**2;const sd=Math.sqrt(q/n);
+  for(const r of Xw)r[j]=(r[j]-mu)/(sd+1e-12)*weights[j];
+ }
+ const Z=wardLinkage(Xw);
+ const clusters=fclusterMaxclust(Z,N_CLUSTERS);
+ const leaves=dendrogramLeaves(Z);
+ const pos=new Map(leaves.map((l,i)=>[l,i]));
+ const order=[...names.keys()].sort((a,b)=>clusters[a]-clusters[b]||pos.get(a)-pos.get(b));
+ return {names,rows,overall,Xw,weights,Z,clusters,leaves,order,pca:pca2(Xw)};
+}
+// Ward 法（scipy.cluster.hierarchy.linkage と同じ Z：[小さいID, 大きいID, 距離, 件数]）
+function wardLinkage(X){
+ const n=X.length,D=new Float64Array(n*n);
+ for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){let s=0;for(let k=0;k<X[i].length;k++)s+=(X[i][k]-X[j][k])**2;D[i*n+j]=D[j*n+i]=Math.sqrt(s)}
+ const active=new Uint8Array(n).fill(1),size=new Array(n).fill(1),id=[...Array(n).keys()],Z=[];
+ for(let step=0;step<n-1;step++){
+  let best=Infinity,a=-1,b=-1;
+  for(let i=0;i<n;i++)if(active[i])for(let j=i+1;j<n;j++)if(active[j]&&D[i*n+j]<best){best=D[i*n+j];a=i;b=j}
+  const na=size[a],nb=size[b];
+  Z.push([Math.min(id[a],id[b]),Math.max(id[a],id[b]),best,na+nb]);
+  for(let k=0;k<n;k++)if(active[k]&&k!==a&&k!==b){const nk=size[k];const d=Math.sqrt(Math.max(0,((na+nk)*D[a*n+k]**2+(nb+nk)*D[b*n+k]**2-nk*best**2)/(na+nb+nk)));D[a*n+k]=D[k*n+a]=d}
+  active[b]=0;size[a]=na+nb;id[a]=n+step;
+ }
+ return Z;
+}
+// fcluster(Z, t, criterion="maxclust") と同じ番号付け（根から左の枝を先にたどる）
+function fclusterMaxclust(Z,t){
+ const n=Z.length+1;
+ const count=thr=>{let c=n;for(const z of Z)if(z[2]<=thr)c--;return c};
+ const thr=[0,...Z.map(z=>z[2])].sort((x,y)=>x-y).find(c=>count(c)<=t);
+ const T=new Array(n).fill(0);let k=1;
+ const mark=node=>{if(node<n)T[node]=k;else{mark(Z[node-n][0]);mark(Z[node-n][1])}};
+ const visit=node=>{if(node<n||Z[node-n][2]<=thr){mark(node);k++;return}visit(Z[node-n][0]);visit(Z[node-n][1])};
+ visit(2*n-2);
+ return T;
+}
+// dendrogram の葉の並び（左から）
+function dendrogramLeaves(Z){const n=Z.length+1,out=[],st=[2*n-2];while(st.length){const node=st.pop();if(node<n)out.push(node);else{st.push(Z[node-n][1]);st.push(Z[node-n][0])}}return out}
+// 主成分分析（sklearn PCA と同じ：中心化した共分散行列の固有ベクトル。向きは絶対値最大の成分を正に）
+function pca2(X){
+ const n=X.length,m=X[0].length,mu=Array(m).fill(0);
+ for(const r of X)r.forEach((x,j)=>mu[j]+=x/n);
+ const C=[...Array(m)].map(()=>Array(m).fill(0));
+ for(const r of X)for(let i=0;i<m;i++)for(let j=0;j<m;j++)C[i][j]+=(r[i]-mu[i])*(r[j]-mu[j])/(n-1);
+ const {vals,vecs}=jacobiEigen(C);
+ const ord=[...vals.keys()].sort((a,b)=>vals[b]-vals[a]);
+ const total=vals.reduce((s,x)=>s+x,0);
+ const comps=ord.slice(0,2).map(k=>{let v=vecs.map(row=>row[k]);const big=v.reduce((bi,x,i)=>Math.abs(x)>Math.abs(v[bi])?i:bi,0);return v[big]<0?v.map(x=>-x):v});
+ return {P:X.map(r=>comps.map(v=>v.reduce((s,x,j)=>s+x*(r[j]-mu[j]),0))),explained:ord.slice(0,2).map(k=>vals[k]/total)};
+}
+function jacobiEigen(A){
+ const m=A.length,a=A.map(r=>r.slice()),V=[...Array(m)].map((_,i)=>Array(m).fill(0).map((_,j)=>i===j?1:0));
+ for(let sweep=0;sweep<100;sweep++){
+  let off=0;for(let i=0;i<m;i++)for(let j=i+1;j<m;j++)off+=a[i][j]**2;if(off<1e-22)break;
+  for(let p=0;p<m;p++)for(let q=p+1;q<m;q++){
+   if(Math.abs(a[p][q])<1e-300)continue;
+   const th=(a[q][q]-a[p][p])/(2*a[p][q]),t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1)),c=1/Math.sqrt(t*t+1),s=t*c;
+   for(let k=0;k<m;k++){const x=a[k][p],y=a[k][q];a[k][p]=c*x-s*y;a[k][q]=s*x+c*y}
+   for(let k=0;k<m;k++){const x=a[p][k],y=a[q][k];a[p][k]=c*x-s*y;a[q][k]=s*x+c*y}
+   for(let k=0;k<m;k++){const x=V[k][p],y=V[k][q];V[k][p]=c*x-s*y;V[k][q]=s*x+c*y}
+  }
+ }
+ return {vals:a.map((r,i)=>r[i]),vecs:V};
 }
 // 書き込み先の行を決める。null なら新規追加
 function locateRow(records,{isNew,id,target}){
@@ -674,17 +802,27 @@ function fmtRef(o){return `${numToCol(o.c1)}${o.r1}:${numToCol(o.c2)}${o.r2}`}
 // 範囲の最終行が旧最終データ行と一致しているときだけ、新しい行まで伸ばす
 function extendRef(ref,oldLast,row){const o=parseRef(ref);if(!o||o.r2!==oldLast||row<=o.r2)return ref;o.r2=row;return fmtRef(o)}
 
+function splitSheetData(xml,name){
+ const selfClose=xml.match(/<sheetData\s*\/>/);
+ if(selfClose)return {head:xml.slice(0,selfClose.index)+'<sheetData>',inner:'',tail:'</sheetData>'+xml.slice(selfClose.index+selfClose[0].length)};
+ const a=xml.indexOf('<sheetData'),c=xml.indexOf('</sheetData>');
+ if(a<0||c<0)throw new Error(`「${name}」シートの sheetData が見つかりません。`);
+ const b=xml.indexOf('>',a)+1;
+ return {head:xml.slice(0,b),inner:xml.slice(b,c),tail:xml.slice(c)};
+}
+function parseRowList(inner,name){
+ const rows=[...inner.matchAll(ROW_RE)].map(m=>{const r=Number(getAttr(' '+m[1],'r'));if(!r)throw new Error(`「${name}」シートに行番号のない行があるため書き込めません。`);return {r,attrs:m[1],body:m[3]||'',raw:m[0]}});
+ for(let i=1;i<rows.length;i++)if(rows[i].r<=rows[i-1].r)throw new Error(`「${name}」シートの行の並びが想定外のため書き込めません。`);
+ return rows;
+}
+
 // 「入力」シートの1行（A〜AB）だけを書き換えた新しい xlsx を返す。targetRow が null なら最終データ行の次に追加
 async function patchWorkbook(buf,rec,targetRow){
  const zip=await JSZip.loadAsync(buf);
  const {sheetPath,tablePaths}=await resolveSheet(zip,SHEET_NAME);
  let xml=await zipText(zip,sheetPath);
- let head,inner,tail;
- const selfClose=xml.match(/<sheetData\s*\/>/);
- if(selfClose){head=xml.slice(0,selfClose.index)+'<sheetData>';inner='';tail='</sheetData>'+xml.slice(selfClose.index+selfClose[0].length)}
- else{const a=xml.indexOf('<sheetData'),c=xml.indexOf('</sheetData>');if(a<0||c<0)throw new Error('「入力」シートの sheetData が見つかりません。');const b=xml.indexOf('>',a)+1;head=xml.slice(0,b);inner=xml.slice(b,c);tail=xml.slice(c)}
- const rows=[...inner.matchAll(ROW_RE)].map(m=>{const r=Number(getAttr(' '+m[1],'r'));if(!r)throw new Error('行番号のない行があるため書き込めません。');return {r,attrs:m[1],body:m[3]||'',raw:m[0]}});
- for(let i=1;i<rows.length;i++)if(rows[i].r<=rows[i-1].r)throw new Error('「入力」シートの行の並びが想定外のため書き込めません。');
+ const {head,inner,tail}=splitSheetData(xml,SHEET_NAME);
+ const rows=parseRowList(inner,SHEET_NAME);
  let oldLast=1;
  for(const x of rows)if(x.r>=2&&parseCells(x.body).some(c=>c.n<=LAST_COL&&cellHasValue(c)))oldLast=x.r;
  const row=targetRow??oldLast+1;
@@ -735,6 +873,108 @@ async function patchWorkbook(buf,rec,targetRow){
  }
  return {buf:await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'}),row};
 }
+
+/* ---- 分析シートの書き出し ---- */
+function relsPathOf(p){const i=p.lastIndexOf('/');return p.slice(0,i)+'/_rels/'+p.slice(i+1)+'.rels'}
+function valueCell(ref,v,s){
+ const sa=s!=null?` s="${s}"`:'';
+ if(typeof v==='number')return Number.isFinite(v)?`<c r="${ref}"${sa}><v>${v}</v></c>`:null;
+ if(v==null||v==='')return null;
+ return `<c r="${ref}"${sa} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(cleanText(v))}</t></is></c>`;
+}
+// newRows（行番号 → [{n:列番号, v:値}]）を書く。clearFrom 行目以降は A〜Z を空にしてから書く（Python の「A4:Z20000 を空にする」と同じ）
+function rewriteSheet(xml,name,newRows,clearFrom){
+ const {head,inner,tail}=splitSheetData(xml,name);
+ const rows=parseRowList(inner,name),byR=new Map(rows.map(x=>[x.r,x]));
+ const tmpl=(rows.find(x=>x.r>=clearFrom)||rows[rows.length-1]||{attrs:''}).attrs;
+ const out=[];let maxR=1,maxC=1;
+ for(const r of [...new Set([...byR.keys(),...newRows.keys()])].sort((a,b)=>a-b)){
+  const ex=byR.get(r),add=newRows.get(r);
+  const old=ex?parseCells(ex.body):[];
+  let cells;
+  if(!add&&r<clearFrom)cells=old;
+  else{
+   const style=new Map(old.map(c=>[c.n,getAttr(' '+c.attrs,'s')]));
+   const addN=new Set((add||[]).map(c=>c.n));
+   cells=old.filter(c=>!addN.has(c.n)&&!(r>=clearFrom&&c.n<=26));
+   for(const c of add||[]){const raw=valueCell(numToCol(c.n)+r,c.v,style.get(c.n)??null);if(raw)cells.push({n:c.n,raw})}
+   if(!cells.length)continue;
+  }
+  out.push(!add&&r<clearFrom&&ex?ex.raw:buildRow(r,otherAttrs(ex?ex.attrs:tmpl),cells));
+  maxR=r;for(const c of cells)maxC=Math.max(maxC,c.n);
+ }
+ return (head+out.join('')+tail).replace(/(<dimension\b[^>]*?\sref=")([^"]*)(")/,(m,a,ref,b)=>a+`A1:${numToCol(maxC)}${maxR}`+b);
+}
+// write_cluster_results と同じ表（クラスタ平均の「平均総合評価」は値と同じ O 列に見出しを置く）
+function clusterResultRows(A){
+ const m=new Map(),n=A.names.length,items=FLAVORS.map((_,i)=>`項目${i+1}`);
+ m.set(3,['ビール名','クラスタ(1-5)',...items,'総合評価'].map((v,i)=>({n:i+1,v})));
+ A.names.forEach((name,i)=>m.set(4+i,[{n:1,v:name},{n:2,v:A.clusters[i]},...A.Xw[i].map((v,j)=>({n:3+j,v})),{n:15,v:A.overall[i]}]));
+ const base=4+n+2;
+ m.set(base,[{n:1,v:'クラスタ'},...items.map((v,j)=>({n:2+j,v})),{n:15,v:'平均総合評価'}]);
+ for(let k=1;k<=N_CLUSTERS;k++){
+  const idx=A.clusters.map((c,i)=>c===k?i:-1).filter(i=>i>=0),cells=[{n:1,v:k}];
+  if(idx.length){
+   for(let j=0;j<12;j++)cells.push({n:2+j,v:idx.reduce((s,i)=>s+A.Xw[i][j],0)/idx.length});
+   const ov=idx.map(i=>A.overall[i]).filter(x=>!Number.isNaN(x));
+   if(ov.length)cells.push({n:15,v:ov.reduce((s,x)=>s+x,0)/ov.length});
+  }
+  m.set(base+k,cells);
+ }
+ return m;
+}
+// write_bertin_table と同じ表（クラスタ順 → 樹形図の並び）
+function bertinRows(A){
+ const m=new Map();
+ A.order.forEach((i,r)=>m.set(2+r,[{n:1,v:A.names[i]},...A.Xw[i].map((v,j)=>({n:2+j,v})),{n:14,v:A.overall[i]},{n:15,v:A.clusters[i]}]));
+ return m;
+}
+// 画像シート（樹形図・Bertin図・PCA）に貼られている PNG の場所と大きさ
+async function analysisImageTargets(zip){
+ const out={};
+ for(const key of ['dendro','bertinImg','pca']){
+  const name=ANALYSIS_SHEETS[key];
+  let sheetPath;
+  try{({sheetPath}=await resolveSheet(zip,name))}catch{throw new Error(`「${name}」シートが見つかりません。一度 Python 版で作成してください。`)}
+  const dir=sheetPath.slice(0,sheetPath.lastIndexOf('/'));
+  const dr=[...relTargets(await zipText(zip,relsPathOf(sheetPath))).values()].find(x=>/\/drawing$/.test(x.type));
+  if(!dr)throw new Error(`「${name}」シートに画像がありません。一度 Python 版で作成してください。`);
+  const dpath=normalizePath(dir,dr.target),ddir=dpath.slice(0,dpath.lastIndexOf('/'));
+  const dxml=(await zipText(zip,dpath))||'';
+  const blip=dxml.match(/<a:blip\b[^>]*?\s[\w]+:embed="([^"]+)"/);
+  const one=dxml.match(/<xdr:oneCellAnchor>[\s\S]*?<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+  const img=blip&&relTargets(await zipText(zip,relsPathOf(dpath))).get(blip[1]);
+  if(!img)throw new Error(`「${name}」シートの画像を読み取れません。`);
+  const mediaPath=normalizePath(ddir,img.target),f=zip.file(mediaPath);
+  const b=f&&await f.async('uint8array');
+  if(!b||b[1]!==0x50||b[2]!==0x4E||b[3]!==0x47)throw new Error(`「${name}」シートの画像が PNG ではありません。`);
+  const dv=new DataView(b.buffer,b.byteOffset);
+  out[key]={mediaPath,width:dv.getUint32(16),height:dv.getUint32(20),drawingPath:dpath,cx:one?+one[1]:null,cy:one?+one[2]:null};
+ }
+ return out;
+}
+async function inspectAnalysisImages(buf){return analysisImageTargets(await JSZip.loadAsync(buf))}
+// 分析シート2枚の表と、画像3枚（PNG のバイト列）を差し替えた新しい xlsx を返す。画像の位置と表示の高さはそのまま
+async function writeAnalysis(buf,A,images){
+ const zip=await JSZip.loadAsync(buf);
+ const targets=await analysisImageTargets(zip);
+ for(const [name,rows,clearFrom] of [[ANALYSIS_SHEETS.result,clusterResultRows(A),4],[ANALYSIS_SHEETS.bertin,bertinRows(A),2]]){
+  let sheetPath;
+  try{({sheetPath}=await resolveSheet(zip,name))}catch{throw new Error(`「${name}」シートが見つかりません。一度 Python 版で作成してください。`)}
+  zip.file(sheetPath,rewriteSheet(await zipText(zip,sheetPath),name,rows,clearFrom),{createFolders:false});
+ }
+ for(const key in targets){
+  const t=targets[key],img=images&&images[key];if(!img)continue;
+  zip.file(t.mediaPath,img,{createFolders:false,binary:true});
+  // 縦横比が変わったとき（樹形図をビールの数に応じて横に伸ばしたとき）は、表示の高さを保って横幅を合わせる
+  const dv=new DataView(img.buffer,img.byteOffset),w=dv.getUint32(16),h=dv.getUint32(20),oldRatio=t.width/t.height;
+  if(t.cx&&Math.abs(w/h-oldRatio)>oldRatio*0.01){
+   const d=await zipText(zip,t.drawingPath);
+   zip.file(t.drawingPath,d.split(`cx="${t.cx}" cy="${t.cy}"`).join(`cx="${Math.round(t.cy*w/h)}" cy="${t.cy}"`),{createFolders:false});
+  }
+ }
+ return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
+}
 /* ===== DATA LAYER END ===== */
 
 const $=id=>document.getElementById(id);
@@ -777,6 +1017,7 @@ function show(view){
  if(view==='editor')renderEditor();
  if(view==='detail')renderDetail();
  if(view==='settings')renderSettings();
+ if(view==='charts')renderCharts();
  if(!isWide()||view!=='editor')window.scrollTo(0,0);
 }
 function setStep(n){step=n;document.body.dataset.step=n;renderEditorChrome();window.scrollTo(0,0)}
@@ -869,7 +1110,7 @@ function renderList(){
  const activeRow=isWide()&&draft&&!draft.isNew?draft.target.row:null;
  let html='',grp=null;
  for(const r of list.slice(0,listLimit)){
-  const g=sortMode==='new'?fmtDateJa(r.when):sortMode==='cluster'?(r.cluster!=null?`クラスタ${r.cluster}`:'クラスタ未分類（解析後に追加）'):null;
+  const g=sortMode==='new'?fmtDateJa(r.when):sortMode==='cluster'?(r.cluster!=null?`クラスタ${r.cluster}`:'クラスタ未分類（12項目が空）'):null;
   if(g!==null&&g!==grp&&!isWide()){html+=`<div class="grp">${esc(g)}</div>`;grp=g}
   if(g!==null&&g!==grp&&isWide()&&sortMode==='cluster'){html+=`<div class="grp">${esc(g)}</div>`;grp=g}
   const on=r.row===activeRow;
@@ -1087,32 +1328,37 @@ function setSavingUI(text){
 }
 
 /* ---------- 保存 ---------- */
+// 書き込み直前に最新を取り直す。他の端末で内容が変わっていれば ConflictError
+async function fetchLatest(progress){
+ if(book.source!=='onedrive'){progress('保存中…');return {buf:book.buf,eTag:null}}
+ progress('最新のファイルを確認中…');
+ const meta=await driveMeta(book.path);
+ if(meta.cTag&&book.cTag?meta.cTag!==book.cTag:meta.eTag!==book.eTag)throw new ConflictError('');
+ return {buf:await driveDownload(meta),eTag:meta.eTag};
+}
+// 書き換えたファイルを OneDrive へアップロード（端末のファイルなら書き出し）して、読み込み直す
+async function commitBuf(buf,eTag,progress){
+ if(book.source==='onedrive'){
+  progress('OneDriveへアップロード中…');
+  const item=await driveUpload(book.path,buf,eTag);
+  book.eTag=item.eTag;book.cTag=item.cTag;
+ }
+ applyBook(Object.assign(book,{buf,syncedAt:new Date()},parseBook(buf)));
+ if(book.source==='local')await exportLocal(buf,book.name);
+}
 async function saveDraft(){
- if(saving||!draft)return;
+ if(saving||analyzing||!draft)return;
  clearSaveErr();
  if(!draft.beer.trim()){if(!isWide())setStep(1);return showSaveErr('beer（ビール名）を入力してください。')}
  if(!book)return showSaveErr('Excelファイルが読み込まれていません。設定から読み込んでください。');
  try{
-  let latestBuf,eTag=null;
-  if(book.source==='onedrive'){
-   setSavingUI('最新のファイルを確認中…');
-   const meta=await driveMeta(book.path);
-   if(meta.cTag&&book.cTag?meta.cTag!==book.cTag:meta.eTag!==book.eTag)throw new ConflictError('');
-   eTag=meta.eTag;
-   latestBuf=await driveDownload(meta);
-  }else{setSavingUI('保存中…');latestBuf=book.buf}
+  const {buf:latestBuf,eTag}=await fetchLatest(setSavingUI);
   const latest=parseBook(latestBuf);
   const row=locateRow(latest.records,draft);
   setSavingUI('書き込み中…');
   const rec=draftToRecord(draft);
   const out=await patchWorkbook(latestBuf,rec,row);
-  if(book.source==='onedrive'){
-   setSavingUI('OneDriveへアップロード中…');
-   const item=await driveUpload(book.path,out.buf,eTag);
-   book.eTag=item.eTag;book.cTag=item.cTag;
-  }
-  applyBook(Object.assign(book,{buf:out.buf,syncedAt:new Date()},parseBook(out.buf)));
-  if(book.source==='local')await exportLocal(out.buf,book.name);
+  await commitBuf(out.buf,eTag,setSavingUI);
   const saved=book.records.find(r=>r.row===out.row);
   lsDel('draft');
   toast(`保存しました（「入力」シート ${out.row}行目）`);
@@ -1173,6 +1419,238 @@ async function exportLocal(buf,name){
 async function shareOrDownload(file){if(!file)return;try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return}}catch(e){if(e.name==='AbortError')return}downloadFile(file)}
 function downloadFile(file){const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
 
+/* ---------- 分析の図（matplotlib の見た目に寄せて Canvas で描く） ---------- */
+const PLOT_FONT='"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif';
+const TAB10=['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf'];
+const VIRIDIS=['#440154','#482878','#3e4989','#31688e','#26828e','#1f9e89','#35b779','#6ece58','#fde725'];
+const hexRgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function viridis(t){t=Math.min(1,Math.max(0,t));const x=t*8,i=Math.min(7,Math.floor(x)),f=x-i,a=hexRgb(VIRIDIS[i]),b=hexRgb(VIRIDIS[i+1]);return a.map((v,k)=>Math.round(v+(b[k]-v)*f))}
+// scatter(c=clusters, cmap='tab10') と同じ色（クラスタ番号の最小〜最大を 0〜1 に）
+function clusterColor(k,lo,hi){const t=hi>lo?(k-lo)/(hi-lo):0;return TAB10[Math.min(9,Math.floor(t*10))]}
+function niceTicks(lo,hi,maxN=8){
+ const span=hi-lo||1;let step=Math.pow(10,Math.floor(Math.log10(span/maxN)));
+ for(const m of [1,2,2.5,5,10])if(span/(step*m)<=maxN){step*=m;break}
+ const dec=(String(+step.toPrecision(6)).split('.')[1]||'').length,out=[];
+ for(let v=Math.ceil(lo/step-1e-9)*step;v<=hi+step*1e-9;v+=step)out.push({v,label:(Math.abs(v)<step*1e-9?0:v).toFixed(dec).replace('-','−')});
+ return out;
+}
+function plotCanvas(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);return [c,ctx]}
+function setFont(ctx,px,weight=''){ctx.font=`${weight} ${px}px ${PLOT_FONT}`.trim()}
+function plotTitle(ctx,text,x,y,k){setFont(ctx,12*k);ctx.fillStyle='#000';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(text,x,y)}
+function plotFrame(ctx,L,T,W,H,k){ctx.strokeStyle='#000';ctx.lineWidth=0.8*k;ctx.strokeRect(L,T,W,H)}
+// 縦軸の目盛り。to(v) はデータ値 → y 座標
+function yTicks(ctx,ticks,x,to,k,{grid=null}={}){
+ setFont(ctx,10*k);ctx.fillStyle='#000';ctx.textAlign='right';ctx.textBaseline='middle';ctx.lineWidth=0.8*k;let maxW=0;
+ for(const t of ticks){const y=to(t.v);if(grid){grid(y);continue}ctx.strokeStyle='#000';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-3.5*k,y);ctx.stroke();ctx.fillText(t.label,x-6*k,y);maxW=Math.max(maxW,ctx.measureText(t.label).width)}
+ return maxW;
+}
+function xTicks(ctx,ticks,y,to,k){
+ setFont(ctx,10*k);ctx.fillStyle='#000';ctx.textAlign='center';ctx.textBaseline='top';ctx.lineWidth=0.8*k;ctx.strokeStyle='#000';
+ for(const t of ticks){const x=to(t.v);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+3.5*k);ctx.stroke();ctx.fillText(t.label,x,y+5*k)}
+}
+function axisLabelY(ctx,text,x,y,k){ctx.save();setFont(ctx,10*k);ctx.fillStyle='#000';ctx.translate(x,y);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(text,0,0);ctx.restore()}
+function axisLabelX(ctx,text,x,y,k){setFont(ctx,10*k);ctx.fillStyle='#000';ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(text,x,y)}
+// 縦のカラーバー。colorAt(t) は 0（下）〜1（上）の色
+function colorbar(ctx,x,y,w,h,lo,hi,colorAt,k,label){
+ for(let i=0;i<Math.ceil(h);i++){ctx.fillStyle=colorAt(1-i/h);ctx.fillRect(x,y+i,w,1.5)}
+ plotFrame(ctx,x,y,w,h,k);
+ setFont(ctx,10*k);ctx.fillStyle='#000';ctx.textAlign='left';ctx.textBaseline='middle';ctx.strokeStyle='#000';let maxW=0;
+ for(const t of niceTicks(lo,hi,9)){const ty=y+h-(t.v-lo)/(hi-lo)*h;ctx.beginPath();ctx.moveTo(x+w,ty);ctx.lineTo(x+w+3.5*k,ty);ctx.stroke();ctx.fillText(t.label,x+w+6*k,ty);maxW=Math.max(maxW,ctx.measureText(t.label).width)}
+ if(label){ctx.save();setFont(ctx,10*k);ctx.translate(x+w+maxW+14*k,y+h/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(label,0,0);ctx.restore()}
+}
+
+// 樹形図の大きさ（pt 単位で組み、k＝1pt あたりの画素数）。
+// ビール名1件あたり DENDRO_PITCH pt の幅を取り、名前（DENDRO_FONT pt）が重ならないよう横に伸ばす。
+const DENDRO_FONT=8,DENDRO_PITCH=10,DENDRO_LABEL_MAX=260;
+function dendroSize(A,maxPx){
+ const ctx=document.createElement('canvas').getContext('2d');setFont(ctx,DENDRO_FONT);
+ const labelW=Math.min(DENDRO_LABEL_MAX,Math.max(...A.names.map(s=>ctx.measureText(String(s)).width)));
+ const Wpt=Math.max(25*72,70+A.names.length*DENDRO_PITCH),Hpt=24+380+labelW+14;
+ const k=Math.min(150/72,Math.sqrt(maxPx/(Wpt*Hpt)),32000/Wpt);
+ return {w:Math.floor(Wpt*k),h:Math.floor(Hpt*k),k,labelW};
+}
+function fitText(ctx,s,maxW){if(ctx.measureText(s).width<=maxW)return s;while(s.length>1&&ctx.measureText(s+'…').width>maxW)s=s.slice(0,-1);return s+'…'}
+// 樹形図（scipy の dendrogram：距離の 70% より下の枝をクラスタごとに色分け）
+function drawDendrogram(A,{w:W,h:H,k,labelW}){
+ const [c,ctx]=plotCanvas(W,H),n=A.names.length,Z=A.Z;
+ const L=58*k,R=W-12*k,T=24*k,B=H-(labelW+14)*k;
+ const maxD=Math.max(...Z.map(z=>z[2])),top=maxD*1.05;
+ const px=new Array(2*n-1),py=new Array(2*n-1).fill(0);
+ A.leaves.forEach((l,i)=>px[l]=L+(i+0.5)*(R-L)/n);
+ Z.forEach((z,i)=>{px[n+i]=(px[z[0]]+px[z[1]])/2;py[n+i]=z[2]});
+ const Y=v=>B-v/top*(B-T);
+ const thr=0.7*maxD,col=new Array(Z.length);let ci=0;
+ const paint=(node,color)=>{if(node<n)return;col[node-n]=color;paint(Z[node-n][0],color);paint(Z[node-n][1],color)};
+ const walk=node=>{if(node<n)return;const z=Z[node-n];if(z[2]<thr){paint(node,TAB10[1+(ci++)%9]);return}col[node-n]=TAB10[0];walk(z[0]);walk(z[1])};
+ walk(2*n-2);
+ ctx.lineWidth=1.5*k;ctx.lineJoin='miter';
+ Z.forEach((z,i)=>{ctx.strokeStyle=col[i];ctx.beginPath();ctx.moveTo(px[z[0]],Y(py[z[0]]));ctx.lineTo(px[z[0]],Y(z[2]));ctx.lineTo(px[z[1]],Y(z[2]));ctx.lineTo(px[z[1]],Y(py[z[1]]));ctx.stroke()});
+ plotFrame(ctx,L,T,R-L,B-T,k);
+ const tw=yTicks(ctx,niceTicks(0,top,8).filter(t=>t.v<=top),L,Y,k);
+ axisLabelY(ctx,'距離',L-tw-10*k,(T+B)/2,k);
+ plotTitle(ctx,`階層クラスタリング（Ward法, クラスタ=${N_CLUSTERS}）`,(L+R)/2,T-5*k,k);
+ setFont(ctx,DENDRO_FONT*k);ctx.fillStyle='#000';ctx.textAlign='right';ctx.textBaseline='middle';
+ A.leaves.forEach(l=>{ctx.save();ctx.translate(px[l],B+5*k);ctx.rotate(-Math.PI/2);ctx.fillText(fitText(ctx,String(A.names[l]),labelW*k),0,0);ctx.restore()});
+ return c;
+}
+// Bertin図（imshow：クラスタ順に並べた標準化値を viridis で塗る）
+function drawBertin(A,W,H){
+ const k=W/(8*72),[c,ctx]=plotCanvas(W,H),rows=A.order.map(i=>A.Xw[i]),n=rows.length;
+ let lo=Infinity,hi=-Infinity;for(const r of rows)for(const v of r){lo=Math.min(lo,v);hi=Math.max(hi,v)}
+ const L=58*k,T=24*k,cbW=18*k,R=W-cbW-62*k,B=H-40*k;
+ const img=document.createElement('canvas');img.width=12;img.height=n;const ic=img.getContext('2d'),id=ic.createImageData(12,n);
+ rows.forEach((r,y)=>r.forEach((v,x)=>{const [cr,cg,cb]=viridis((v-lo)/(hi-lo||1)),o=(y*12+x)*4;id.data[o]=cr;id.data[o+1]=cg;id.data[o+2]=cb;id.data[o+3]=255}));
+ ic.putImageData(id,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(img,L,T,R-L,B-T);
+ plotFrame(ctx,L,T,R-L,B-T,k);
+ xTicks(ctx,niceTicks(0,11,6),B,v=>L+(v+0.5)/12*(R-L),k);
+ const tw=yTicks(ctx,niceTicks(0,n-1,7),L,v=>T+(v+0.5)/n*(B-T),k);
+ axisLabelX(ctx,'項目（1..12）',(L+R)/2,B+20*k,k);
+ axisLabelY(ctx,'サンプル（並べ替え済み）',L-tw-10*k,(T+B)/2,k);
+ plotTitle(ctx,'Bertin図（クラスタ順）',(L+R)/2,T-5*k,k);
+ colorbar(ctx,R+22*k,T,cbW,B-T,lo,hi,t=>{const [r,g,b]=viridis(t);return `rgb(${r},${g},${b})`},k);
+ return c;
+}
+// PCA 2次元マップ（各点の左にミニ・レーダー。点・名前・レーダーはクラスタ色）
+function drawPCA(A,W,H){
+ const k=W/(18*72),[c,ctx]=plotCanvas(W,H),P=A.pca.P,n=P.length,ks=A.clusters;
+ const kLo=Math.min(...ks),kHi=Math.max(...ks),colors=ks.map(x=>clusterColor(x,kLo,kHi));
+ const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+ let x0=Math.min(...xs)-0.3,x1=Math.max(...xs)+0.3,y0=Math.min(...ys)-0.3,y1=Math.max(...ys)+0.3;
+ const offsetLeft=0.02*(x1-x0);
+ const L=62*k,T=26*k,R=W-150*k,B=H-48*k,pw=R-L,ph=B-T;
+ // 縦横の縮尺をそろえる（set_aspect('equal', adjustable='datalim')）
+ const s=Math.min(pw/(x1-x0),ph/(y1-y0)),cx=(x0+x1)/2,cy=(y0+y1)/2;
+ x0=cx-pw/s/2;x1=cx+pw/s/2;y0=cy-ph/s/2;y1=cy+ph/s/2;
+ const X=v=>L+(v-x0)*s,Y=v=>B-(v-y0)*s;
+ // 格子と目盛り
+ const xt=niceTicks(x0,x1,8),yt=niceTicks(y0,y1,8);
+ ctx.save();ctx.strokeStyle='rgba(176,176,176,.4)';ctx.lineWidth=0.5*k;ctx.setLineDash([0.5*k,1.65*k]);
+ for(const t of xt){ctx.beginPath();ctx.moveTo(X(t.v),T);ctx.lineTo(X(t.v),B);ctx.stroke()}
+ for(const t of yt){ctx.beginPath();ctx.moveTo(L,Y(t.v));ctx.lineTo(R,Y(t.v));ctx.stroke()}
+ ctx.restore();
+ // 点
+ ctx.save();ctx.beginPath();ctx.rect(L,T,pw,ph);ctx.clip();
+ const pr=Math.sqrt(20)/2*k;
+ P.forEach((p,i)=>{ctx.globalAlpha=0.9;ctx.fillStyle=colors[i];ctx.beginPath();ctx.arc(X(p[0]),Y(p[1]),pr,0,Math.PI*2);ctx.fill();ctx.lineWidth=0.4*k;ctx.strokeStyle='#000';ctx.stroke()});
+ // 名前
+ ctx.globalAlpha=0.8;setFont(ctx,6*k);ctx.textAlign='left';ctx.textBaseline='alphabetic';
+ P.forEach((p,i)=>{ctx.fillStyle=colors[i];ctx.fillText(String(A.names[i]),X(p[0]+0.03),Y(p[1]))});
+ // ミニ・レーダー（列ごとに 0〜1 に正規化。項目1＝12時から時計回り）
+ const mn=Array(12).fill(Infinity),mx=Array(12).fill(-Infinity);
+ for(const r of A.Xw)r.forEach((v,j)=>{mn[j]=Math.min(mn[j],v);mx[j]=Math.max(mx[j],v)});
+ const Rr=6*k;
+ P.forEach((p,i)=>{
+  const cxp=X(p[0]-offsetLeft),cyp=Y(p[1]);
+  ctx.globalAlpha=1;ctx.strokeStyle='#d3d3d3';ctx.lineWidth=0.4*k;ctx.beginPath();ctx.arc(cxp,cyp,Rr,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();
+  A.Xw[i].forEach((v,j)=>{const t=Math.min(1,Math.max(0,(v-mn[j])/Math.max(mx[j]-mn[j],1e-9))),a=Math.PI/2-j*Math.PI/6,x=cxp+Rr*t*Math.cos(a),y=cyp-Rr*t*Math.sin(a);j?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.closePath();ctx.globalAlpha=0.7;ctx.fillStyle=colors[i];ctx.fill();ctx.lineWidth=0.3*k;ctx.strokeStyle='#000';ctx.stroke();
+ });
+ ctx.restore();
+ plotFrame(ctx,L,T,pw,ph,k);
+ xTicks(ctx,xt,B,X,k);
+ const tw=yTicks(ctx,yt,L,Y,k);
+ axisLabelX(ctx,`主成分1 (${(A.pca.explained[0]*100).toFixed(1)}%)`,(L+R)/2,B+20*k,k);
+ axisLabelY(ctx,`主成分2 (${(A.pca.explained[1]*100).toFixed(1)}%)`,L-tw-10*k,(T+B)/2,k);
+ plotTitle(ctx,'PCA 2次元マップ',(L+R)/2,T-5*k,k);
+ const cbh=ph*0.85;
+ colorbar(ctx,R+40*k,T+(ph-cbh)/2,22*k,cbh,kLo,kHi,t=>clusterColor(kLo+t*(kHi-kLo),kLo,kHi),k,'クラスタ番号');
+ return c;
+}
+// 元の画像と同じ縦横比で、端末が扱える大きさに収める（iPhone の Canvas は約1,670万画素まで）
+function pixelBudget(){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);return ios?15e6:40e6}
+function imageSize({width,height},max=pixelBudget()){
+ const s=Math.min(1,Math.sqrt(max/(width*height)));
+ return {w:Math.floor(width*s),h:Math.floor(height*s)};
+}
+async function canvasBlob(c){
+ const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('画像の作成に失敗しました（端末のメモリ不足の可能性があります）。')),'image/png'));
+ c.width=c.height=0;
+ return blob;
+}
+async function canvasPng(c){return new Uint8Array(await (await canvasBlob(c)).arrayBuffer())}
+const nextFrame=()=>new Promise(r=>setTimeout(r,30));
+
+/* ---------- 分析の再生成 ---------- */
+let analyzing=false;
+function anaMsg(t,type='err'){const el=$('anaMsg');el.textContent=t||'';el.className='msg'+(type==='info'?' info':'')+(t?'':' hidden');el.style.margin='12px 0 0'}
+async function regenerateAnalysis(){
+ if(analyzing||saving)return;
+ if(!book)return anaMsg('Excelファイルが読み込まれていません。');
+ if(!confirm('分析を再生成して、Excelの分析シート（クラスタ結果・Bertin図ビュー・樹形図・Bertin図・PCAプロット）を書き換えますか？'))return;
+ analyzing=true;anaMsg('');
+ const btn=$('anaBtn'),prog=t=>{btn.textContent=t};btn.disabled=true;
+ try{
+  const {buf,eTag}=await fetchLatest(prog);
+  prog('計算中…');await nextFrame();
+  const A=parseBook(buf).analysis;
+  if(!A)throw new Error('分析できる記録が2件未満です。');
+  const targets=await inspectAnalysisImages(buf),images={};
+  const jobs=[['dendro','樹形図',drawDendrogram],['bertinImg','Bertin図',drawBertin],['pca','PCAプロット',drawPCA]];
+  for(let i=0;i<jobs.length;i++){
+   const [key,label,draw]=jobs[i];prog(`図を作成中…（${i+1}/3 ${label}）`);await nextFrame();
+   const c=key==='dendro'?drawDendrogram(A,dendroSize(A,pixelBudget())):(({w,h})=>draw(A,w,h))(imageSize(targets[key]));
+   images[key]=await canvasPng(c);
+  }
+  prog('Excelに書き込み中…');await nextFrame();
+  const out=await writeAnalysis(buf,A,images);
+  await commitBuf(out,eTag,prog);
+  toast('分析を再生成しました');
+  anaMsg(`分析を再生成しました（${A.names.length}件）。`,'info');
+ }catch(e){
+  console.error(e);
+  if(e instanceof ConflictError){anaMsg('他の端末で変更されています。読み込み直してから、もう一度実行してください。');banner('他の端末で変更されています。読み込み直しますか？',{actions:[{label:'読み込み直す',fn:()=>{banner('');loadFromDrive()}}]})}
+  else if(!e.redirecting)anaMsg(e.message||String(e));
+ }finally{analyzing=false;btn.disabled=false;btn.textContent='分析を再生成してExcelに保存';renderSettings()}
+}
+$('anaBtn').onclick=regenerateAnalysis;
+
+/* ---------- 分析の図（アプリ内で表示。<img> なので長押しで写真に保存できる） ---------- */
+let charts={A:null,urls:{},blobs:{}};
+async function renderCharts(){
+ const A=book&&book.analysis;
+ $('chNote').textContent=!book?'Excelファイルが読み込まれていません。':!A?'分析できる記録がありません。':
+  `最新の記録（${A.names.length}件）で描いた図です。${matchMedia('(pointer:coarse)').matches?'図を長押しすると写真に保存できます。':'図を右クリックすると画像として保存できます。'}Excel の図は「分析を再生成」するまで古いままの場合があります。`;
+ if(charts.A===A)return;
+ for(const u of Object.values(charts.urls))URL.revokeObjectURL(u);
+ charts={A,urls:{},blobs:{}};
+ const jobs=[['dendro','imgDendro',()=>drawDendrogram(A,dendroSize(A,Math.min(pixelBudget(),12e6)))],['pca','imgPca',()=>{const s=imageSize({width:5400,height:4200},10e6);return drawPCA(A,s.w,s.h)}]];
+ for(const [,id] of jobs){const img=$(id);img.removeAttribute('src');img.classList.add('hidden');showChartWait(img,A?'図を作成中…':'')}
+ if(!A)return;
+ try{
+  for(const [key,id,draw] of jobs){
+   await nextFrame();
+   if(charts.A!==A)return;
+   const blob=await canvasBlob(draw());
+   if(charts.A!==A)return;
+   charts.blobs[key]=blob;charts.urls[key]=URL.createObjectURL(blob);
+   const img=$(id);img.src=charts.urls[key];img.classList.remove('hidden');showChartWait(img,'');
+  }
+ }catch(e){console.error(e);$('chNote').textContent='図の作成に失敗しました：'+e.message;charts.A=null}
+}
+function showChartWait(img,text){
+ let w=img.parentNode.querySelector('.chart-wait');
+ if(!text){if(w)w.remove();return}
+ if(!w){w=document.createElement('div');w.className='chart-wait';img.parentNode.appendChild(w)}
+ w.textContent=text;
+}
+async function saveChart(key){
+ const blob=charts.blobs[key];if(!blob)return;
+ const file=new File([blob],key==='dendro'?'樹形図.png':'PCAマップ.png',{type:'image/png'});
+ try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return}}catch(e){if(e.name==='AbortError')return}
+ downloadFile(file);
+}
+$('vCharts').addEventListener('click',e=>{
+ const s=e.target.closest('[data-save]');if(s)return saveChart(s.dataset.save);
+ const z=e.target.closest('[data-zoom]');if(!z)return;
+ const box=z.dataset.zoom==='dendro'?$('boxDendro'):$('boxPca');
+ z.textContent=box.classList.toggle('zoomed')?'全体を表示':'拡大して表示';
+ box.scrollLeft=0;box.scrollTop=0;
+});
+$('chartsBtn').onclick=()=>show('charts');
+$('anaView').onclick=()=>show('charts');
+$('chBack').onclick=()=>{if(isWide())show('editor');else show('list')};
+
 /* ---------- 詳細 ---------- */
 function renderDetail(){
  const r=detailRec;if(!r){show('list');return}
@@ -1222,9 +1700,13 @@ function renderSettings(){
   const mixed=[d.number,d.date,d.text].filter(Boolean).length>1;
   const missing=FIELDS.filter(f=>f.head&&!book.headers[f.col]).map(f=>f.col);
   $('dataNote').innerHTML=`When列（O）：${esc(parts.join('、'))}${mixed?' ⚠ 形式が混在しています（どちらも読み込めます）':''}<br>`+
-   (missing.length?`見出しが未設定の列：${missing[0]}〜${missing[missing.length-1]}（最初の保存時に1行目へ追加します）<br>`:'')+
-   (book.clusters?`クラスタ結果（5群）：${book.clusters.count}件を読み込み済み`:'クラスタ結果（5群）シートは見つかりませんでした');
+   (missing.length?`見出しが未設定の列：${missing[0]}〜${missing[missing.length-1]}（最初の保存時に1行目へ追加します）`:'');
  }else $('dataNote').textContent='';
+ const cl=book&&book.clusters;
+ $('anaSummary').textContent=!book?'ファイル未読み込み':!cl?'分析できる記録がありません':
+  `${cl.count}件・${N_CLUSTERS}群（${Object.keys(cl.sizes).sort((a,b)=>a-b).map(k=>`${k}:${cl.sizes[k]}件`).join('／')}）・PCA寄与率 ${(cl.explained[0]*100).toFixed(1)}%／${(cl.explained[1]*100).toFixed(1)}%`+
+  (cl.weights.some(w=>w!==1)?`・重み ${cl.weights.join(',')}`:'');
+ $('anaBtn').disabled=!cl||analyzing;
 }
 $('setBack').onclick=()=>{if(isWide())show('editor');else show('list')};
 $('modeDrive').onclick=()=>{lsSet('mode','onedrive');renderSettings();renderSync()};
@@ -1322,6 +1804,7 @@ function applyBook(b){
  if(detailRec){detailRec=findLatest({row:detailRec.row,id:detailRec.id,beer:detailRec.beer,whenRaw:detailRec.whenRaw});if(document.body.dataset.view==='detail')detailRec?renderDetail():show('list')}
  renderSync();renderList();fillDatalists();
  if(document.body.dataset.view==='settings')renderSettings();
+ if(document.body.dataset.view==='charts')renderCharts();
  if(draft)renderEditorChrome();
 }
 function fillDatalists(){
