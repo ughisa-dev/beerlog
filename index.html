@@ -162,11 +162,20 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
 .score-num{font-size:32px;font-weight:700;color:var(--acc);min-width:52px;text-align:left}
 .score-card .hint{margin:4px 0 0}
 .comments{display:grid;gap:16px}
+.f-photo{grid-column:1/-1}
+.photo-row{display:flex;gap:14px;align-items:center}
+.photo-box{width:120px;height:120px;border-radius:14px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto;color:#6F6455;font-size:13px;text-align:center}
+.photo-box img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-box span{padding:6px}
+.photo-btns{display:flex;flex-direction:column;gap:8px}
+.dt-photo{margin:0 0 12px;border-radius:18px;overflow:hidden;background:var(--card)}
+.dt-photo img{display:block;width:100%;max-height:70vh;object-fit:contain;-webkit-touch-callout:default}
 .save-err{margin-bottom:10px}
 .save-to{font-size:13px;color:var(--sub);text-align:center;margin-bottom:10px;line-height:1.5}
 .foot-row{display:flex;gap:12px;align-items:center}
 .foot-row .primary{flex:1}
 .ed-foot{border-top:1px solid var(--line2);background:var(--bg)}
+@media (max-width:899px){body[data-step="3"] #vEditor{padding-bottom:calc(200px + env(safe-area-inset-bottom))}}
 
 /* ---- 数値入力シート ---- */
 .sheet-ov{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.62);display:flex;align-items:flex-end;justify-content:center}
@@ -425,6 +434,14 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
    <div class="fld"><label class="lbl" for="fNose">nose（香り）</label><textarea class="inp" id="fNose" data-k="nose" rows="2" placeholder="香りの印象"></textarea></div>
    <div class="fld"><label class="lbl" for="fTaste">taste（味）</label><textarea class="inp" id="fTaste" data-k="taste" rows="2" placeholder="口当たり、余韻など"></textarea></div>
    <div class="fld"><label class="lbl" for="fNotes">notes（メモ）</label><textarea class="inp" id="fNotes" data-k="notes" rows="2" placeholder="一緒に飲んだ人、合わせた料理など"></textarea></div>
+   <div class="fld f-photo"><span class="lbl">photo（写真）</span>
+    <div class="photo-row">
+     <div class="photo-box"><img id="phImg" class="hidden" alt="写真"><span id="phEmpty">写真なし</span></div>
+     <div class="photo-btns"><button type="button" class="btn-s" id="phPick">写真を選ぶ</button><button type="button" class="btn-s hidden" id="phDel">写真を削除</button></div>
+    </div>
+    <input type="file" id="phInput" accept="image/*" class="hidden">
+    <p class="tiny" style="margin:8px 0 0">ビール・お店・人などの写真を1枚。Excel の「入力」シートでは、この記録の行の AC 列に、行の高さに収まる大きさで貼り付けます。</p>
+   </div>
   </div>
  </div>
 
@@ -451,6 +468,7 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
  <svg id="dtRadar" class="radar" viewBox="-215 -165 430 330" role="img" aria-label="味わいレーダーチャート"></svg>
  <div class="legend" id="dtLegend"></div>
  <div class="tiles4" id="dtTiles"></div>
+ <div class="dt-photo hidden" id="dtPhoto"><img id="dtPhotoImg" alt="写真"></div>
  <div class="card kv" id="dtKV"></div>
  <div class="dt-actions">
   <button class="ghost block" id="dtSimilar">似ているビール（同じクラスタ）を見る</button>
@@ -816,8 +834,9 @@ function parseRowList(inner,name){
  return rows;
 }
 
-// 「入力」シートの1行（A〜AB）だけを書き換えた新しい xlsx を返す。targetRow が null なら最終データ行の次に追加
-async function patchWorkbook(buf,rec,targetRow){
+// 「入力」シートの1行（A〜AB）だけを書き換えた新しい xlsx を返す。targetRow が null なら最終データ行の次に追加。
+// photo：undefined＝写真はそのまま、null＝その行の写真を削除、{bytes,width,height}＝その行の写真を差し替え
+async function patchWorkbook(buf,rec,targetRow,photo){
  const zip=await JSZip.loadAsync(buf);
  const {sheetPath,tablePaths}=await resolveSheet(zip,SHEET_NAME);
  let xml=await zipText(zip,sheetPath);
@@ -836,7 +855,7 @@ async function patchWorkbook(buf,rec,targetRow){
  const hstyle=(hcells.filter(c=>c.n<=colToNum('Q')).pop()||{}).attrs;
  const hs=hstyle?getAttr(' '+hstyle,'s'):null;
  let hchanged=false;
- for(const f of FIELDS){
+ for(const f of [...FIELDS,...(photo?[{col:PHOTO_COL,head:'Photo'}]:[])]){
   if(!f.head)continue;const n=colToNum(f.col),i=hcells.findIndex(c=>c.n===n);
   if(i>=0&&cellHasValue(hcells[i]))continue;
   if(i>=0&&/<f[\s>\/]/.test(hcells[i].body))continue;
@@ -865,6 +884,7 @@ async function patchWorkbook(buf,rec,targetRow){
  xml=head+rows.map(x=>x.raw).join('')+tail;
  xml=xml.replace(/(<dimension\b[^>]*?\sref=")([^"]*)(")/,(m,a,ref,b)=>{const o=parseRef(ref);if(!o)return m;o.c1=Math.min(o.c1,1);o.r1=Math.min(o.r1,1);o.c2=Math.max(o.c2,maxCol);o.r2=Math.max(o.r2,row);return a+fmtRef(o)+b});
  xml=xml.replace(/(<autoFilter\b[^>]*?\sref=")([^"]*)(")/,(m,a,ref,b)=>a+extendRef(ref,oldLast,row)+b);
+ if(photo!==undefined)xml=await setRowPhoto(zip,sheetPath,xml,row,photo,rec.beer);
  zip.file(sheetPath,xml,{createFolders:false});
  for(const tp of tablePaths){
   const t=await zipText(zip,tp);if(!t)continue;
@@ -872,6 +892,123 @@ async function patchWorkbook(buf,rec,targetRow){
   if(t2!==t)zip.file(tp,t2,{createFolders:false});
  }
  return {buf:await zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'}),row};
+}
+
+/* ---- 写真（「入力」シートの AC 列のセル内に、行の高さに収まる大きさで貼る） ----
+   セルの値ではなく、セルの上に浮いた画像（「セルに合わせて移動するがサイズは変更しない」）として置く。
+   Excel の「セル内に配置」は openpyxl（分析スクリプト）で保存し直すと失われるおそれがあるため使わない。 */
+const PHOTO_COL='AC',PHOTO_COLN=colToNum(PHOTO_COL);
+const NS_R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const REL_DRAWING=NS_R+'/drawing',REL_IMAGE=NS_R+'/image';
+const EMU_PX=9525,EMU_PT=12700;
+// openpyxl（分析スクリプト）で保存し直すと接頭辞 xdr: が付かない形になるので、どちらでも読めるようにする
+const ANCHOR_RE=/<((?:\w+:)?)(twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/\1\2>/g;
+const dirOf=p=>p.slice(0,p.lastIndexOf('/'));
+function maxNum(list,re){let m=0;for(const x of list){const r=x.match(re);if(r)m=Math.max(m,+r[1])}return m}
+function addRel(xml,type,target){
+ if(!xml)xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+ const id='rId'+(maxNum([...xml.matchAll(/\sId="rId(\d+)"/g)].map(m=>m[0]),/(\d+)/)+1);
+ return {xml:xml.replace('</Relationships>',`<Relationship Id="${id}" Type="${type}" Target="${xmlEsc(target)}"/></Relationships>`),id};
+}
+function removeRel(xml,id){return xml.replace(new RegExp(`<Relationship\\b[^>]*\\sId="${id}"[^>]*/>`),'')}
+// 写真の列（AC）に左上がある画像：[{raw, row(1始まり), embed}]
+function photoAnchors(dxml){
+ const out=[];
+ for(const m of (dxml||'').matchAll(ANCHOR_RE)){
+  const f=m[0].match(/<(?:\w+:)?from>\s*<(?:\w+:)?col>(\d+)<\/(?:\w+:)?col>[\s\S]*?<(?:\w+:)?row>(\d+)<\/(?:\w+:)?row>/),e=m[0].match(/<(?:\w+:)?blip\b[^>]*?\s[\w]+:embed="([^"]+)"/);
+  if(f&&e&&+f[1]===PHOTO_COLN-1)out.push({raw:m[0],row:+f[2]+1,embed:e[1]});
+ }
+ return out;
+}
+async function sheetDrawingPath(zip,sheetPath){
+ const d=[...relTargets(await zipText(zip,relsPathOf(sheetPath))).entries()].find(([,v])=>/\/drawing$/.test(v.type));
+ return d?normalizePath(dirOf(sheetPath),d[1].target):null;
+}
+// 行番号 → 写真ファイルのパス
+async function readPhotoIndex(zip){
+ const map=new Map();
+ const {sheetPath}=await resolveSheet(zip,SHEET_NAME);
+ const dpath=await sheetDrawingPath(zip,sheetPath);if(!dpath)return map;
+ const rels=relTargets(await zipText(zip,relsPathOf(dpath)));
+ for(const a of photoAnchors(await zipText(zip,dpath))){const t=rels.get(a.embed);if(t)map.set(a.row,normalizePath(dirOf(dpath),t.target))}
+ return map;
+}
+// 行の高さ（pt）と写真列の幅（px）から、セル内に収まる写真の大きさ（EMU）を決める
+function photoExtent(xml,row,w,h){
+ const fmt=(xml.match(/<sheetFormatPr\b[^>]*>/)||[''])[0];
+ const rowTag=(xml.match(new RegExp(`<row\\b[^>]*\\sr="${row}"[^>]*>`))||[''])[0];
+ const ht=+(getAttr(rowTag,'ht')||getAttr(fmt,'defaultRowHeight')||15);
+ let cw=+(getAttr(fmt,'defaultColWidth')||((+getAttr(fmt,'baseColWidth')||8)+0.43));
+ for(const c of xml.matchAll(/<col\b[^>]*>/g)){const a=+getAttr(c[0],'min'),b=+getAttr(c[0],'max');if(a<=PHOTO_COLN&&PHOTO_COLN<=b&&getAttr(c[0],'width'))cw=+getAttr(c[0],'width')}
+ const maxH=ht*EMU_PT-2*EMU_PX,maxW=Math.round(cw*7+5)*EMU_PX-2*EMU_PX;
+ const s=Math.min(maxW/w,maxH/h);
+ return {cx:Math.max(EMU_PX,Math.round(w*s)),cy:Math.max(EMU_PX,Math.round(h*s))};
+}
+function photoAnchorXml(row,{cx,cy},id,rid,label){
+ const c=PHOTO_COLN-1,r=row-1;
+ return `<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>${c}</xdr:col><xdr:colOff>${EMU_PX}</xdr:colOff><xdr:row>${r}</xdr:row><xdr:rowOff>${EMU_PX}</xdr:rowOff></xdr:from>`+
+  `<xdr:to><xdr:col>${c}</xdr:col><xdr:colOff>${EMU_PX+cx}</xdr:colOff><xdr:row>${r}</xdr:row><xdr:rowOff>${EMU_PX+cy}</xdr:rowOff></xdr:to>`+
+  `<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="Photo ${row}" descr="${xmlEsc(cleanText(label||''))}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>`+
+  `<xdr:blipFill><a:blip xmlns:r="${NS_R}" r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>`+
+  `<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor>`;
+}
+async function addContentTypes(zip,{override,jpeg}){
+ let ct=await zipText(zip,'[Content_Types].xml');const ct0=ct;
+ if(jpeg&&!/<Default\b[^>]*Extension="jpeg"/i.test(ct))ct=ct.replace(/(<Types\b[^>]*>)/,'$1<Default Extension="jpeg" ContentType="image/jpeg"/>');
+ if(override&&!ct.includes(`PartName="${override}"`))ct=ct.replace('</Types>',`<Override PartName="${override}" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+ if(ct!==ct0)zip.file('[Content_Types].xml',ct,{createFolders:false});
+}
+// シートの <drawing> 要素を、スキーマの順番（legacyDrawing などより前）に入れる
+function insertDrawingElement(xml,rid){
+ const el=/<worksheet\b[^>]*\sxmlns:r="/.test(xml)?`<drawing r:id="${rid}"/>`:`<drawing xmlns:r="${NS_R}" r:id="${rid}"/>`;
+ let at=-1;
+ for(const t of ['legacyDrawing','legacyDrawingHF','drawingHF','picture','oleObjects','controls','webPublishItems','tableParts','extLst']){const i=xml.search(new RegExp(`<${t}[\\s>/]`));if(i>=0&&(at<0||i<at))at=i}
+ if(at<0)at=xml.lastIndexOf('</worksheet>');
+ return xml.slice(0,at)+el+xml.slice(at);
+}
+async function setRowPhoto(zip,sheetPath,xml,row,photo,label){
+ let dpath=await sheetDrawingPath(zip,sheetPath),dxml;
+ if(dpath)dxml=await zipText(zip,dpath);
+ else{
+  if(!photo)return xml;
+  const n=maxNum(Object.keys(zip.files),/^xl\/drawings\/drawing(\d+)\.xml$/)+1;
+  dpath=`xl/drawings/drawing${n}.xml`;
+  dxml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"></xdr:wsDr>';
+  const srelsPath=relsPathOf(sheetPath),r=addRel(await zipText(zip,srelsPath),REL_DRAWING,`../drawings/drawing${n}.xml`);
+  zip.file(srelsPath,r.xml,{createFolders:false});
+  xml=insertDrawingElement(xml,r.id);
+  await addContentTypes(zip,{override:'/'+dpath});
+ }
+ // 追加する画像は xdr:／a: の接頭辞で書くので、ルートで宣言しておく
+ for(const [pre,ns] of [['xdr','http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing'],['a','http://schemas.openxmlformats.org/drawingml/2006/main']])
+  if(!new RegExp(`<(?:\\w+:)?wsDr\\b[^>]*\\sxmlns:${pre}="`).test(dxml))dxml=dxml.replace(/<((?:\w+:)?)wsDr\b/,(m,p)=>`<${p}wsDr xmlns:${pre}="${ns}"`);
+ const drelsPath=relsPathOf(dpath);
+ let drels=await zipText(zip,drelsPath);
+ // その行の古い写真を外す（どこからも参照されなくなった画像ファイルは消す）
+ for(const a of photoAnchors(dxml).filter(a=>a.row===row)){
+  const t=relTargets(drels).get(a.embed);
+  dxml=dxml.replace(a.raw,'');drels=removeRel(drels,a.embed);
+  if(t){
+   const mp=normalizePath(dirOf(dpath),t.target);let used=false;
+   for(const f of Object.keys(zip.files).filter(f=>/\.rels$/.test(f))){
+    const x=f===drelsPath?drels:await zipText(zip,f),base=dirOf(dirOf(f));
+    for(const v of relTargets(x).values())if(!/^https?:/.test(v.target)&&normalizePath(base,v.target)===mp)used=true;
+   }
+   if(!used)zip.remove(mp);
+  }
+ }
+ if(photo){
+  const k=maxNum(Object.keys(zip.files),/^xl\/media\/image(\d+)\.\w+$/)+1;
+  zip.file(`xl/media/image${k}.jpeg`,photo.bytes,{createFolders:false,binary:true});
+  await addContentTypes(zip,{jpeg:true});
+  const r=addRel(drels,REL_IMAGE,`../media/image${k}.jpeg`);drels=r.xml;
+  const id=maxNum([...dxml.matchAll(/<(?:\w+:)?cNvPr\b[^>]*\sid="(\d+)"/g)].map(m=>m[0]),/\sid="(\d+)"/)+1;
+  const anchor=photoAnchorXml(row,photoExtent(xml,row,photo.width,photo.height),Math.max(2,id),r.id,label);
+  dxml=dxml.replace(/<\/((?:\w+:)?)wsDr>\s*$/,(m,p)=>anchor+`</${p}wsDr>`);
+ }
+ zip.file(dpath,dxml,{createFolders:false});
+ if(drels)zip.file(drelsPath,drels,{createFolders:false});
+ return xml;
 }
 
 /* ---- 分析シートの書き出し ---- */
@@ -941,8 +1078,8 @@ async function analysisImageTargets(zip){
   if(!dr)throw new Error(`「${name}」シートに画像がありません。一度 Python 版で作成してください。`);
   const dpath=normalizePath(dir,dr.target),ddir=dpath.slice(0,dpath.lastIndexOf('/'));
   const dxml=(await zipText(zip,dpath))||'';
-  const blip=dxml.match(/<a:blip\b[^>]*?\s[\w]+:embed="([^"]+)"/);
-  const one=dxml.match(/<xdr:oneCellAnchor>[\s\S]*?<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+  const blip=dxml.match(/<(?:\w+:)?blip\b[^>]*?\s[\w]+:embed="([^"]+)"/);
+  const one=dxml.match(/<(?:\w+:)?oneCellAnchor>[\s\S]*?<(?:\w+:)?ext\s+cx="(\d+)"\s+cy="(\d+)"/);
   const img=blip&&relTargets(await zipText(zip,relsPathOf(dpath))).get(blip[1]);
   if(!img)throw new Error(`「${name}」シートの画像を読み取れません。`);
   const mediaPath=normalizePath(ddir,img.target),f=zip.file(mediaPath);
@@ -1161,17 +1298,18 @@ function draftToRecord(d){
  return rec;
 }
 function snap(){draftSnapshot=JSON.stringify(draft)}
-function isDirty(){return draft&&JSON.stringify(draft)!==draftSnapshot}
+function isDirty(){return !!draft&&(JSON.stringify(draft)!==draftSnapshot||draftPhoto!==undefined)}
 function confirmDiscard(){return !isDirty()||confirm('編集中の内容を破棄しますか？')}
 let persistTimer=null;
 function persistDraft(){clearTimeout(persistTimer);persistTimer=setTimeout(()=>{if(draft&&isDirty())lsSet('draft',JSON.stringify({draft,snap:draftSnapshot,step}));else lsDel('draft')},300)}
 function startNew(src){
+ resetDraftPhoto();
  draft=src?draftDuplicate(src):emptyDraft();snap();sel=1;
  if(src)draftSnapshot='';
  setStep(1);show('editor');renderList();
 }
-function startEdit(rec){draft=draftFrom(rec);snap();sel=1;setStep(1);show('editor');renderList()}
-function leaveEditor(){draft=null;lsDel('draft');clearSaveErr();if(isWide()){startNew()}else show(detailRec?'detail':'list');renderList()}
+function startEdit(rec){resetDraftPhoto();draft=draftFrom(rec);snap();sel=1;setStep(1);show('editor');renderList()}
+function leaveEditor(){draft=null;resetDraftPhoto();lsDel('draft');clearSaveErr();if(isWide()){startNew()}else show(detailRec?'detail':'list');renderList()}
 
 /* ---------- エディタ描画 ---------- */
 const textFields=['beer','style','producer','country','region','where','appearance','nose','taste','notes'];
@@ -1179,7 +1317,7 @@ function renderEditor(){
  if(!draft){draft=emptyDraft();snap()}
  for(const el of document.querySelectorAll('#vEditor [data-k]')){const k=el.dataset.k;const v=k==='abv'?fmtPlain(draft.abv):(draft[k]??'');if(el.value!==String(v))el.value=v}
  $('fWhen').value=draft.whenISO||'';
- renderColour();renderServe();renderFlavor();renderScore();renderEditorChrome();fillDatalists();
+ renderColour();renderServe();renderFlavor();renderScore();renderEditorChrome();fillDatalists();renderPhotoField();
 }
 function renderEditorChrome(){
  if(!draft)return;
@@ -1361,10 +1499,11 @@ async function saveDraft(){
   const row=locateRow(latest.records,draft);
   setSavingUI('書き込み中…');
   const rec=draftToRecord(draft);
-  const out=await patchWorkbook(latestBuf,rec,row);
+  const photo=draftPhoto===undefined?undefined:draftPhoto&&{bytes:draftPhoto.bytes,width:draftPhoto.width,height:draftPhoto.height};
+  const out=await patchWorkbook(latestBuf,rec,row,photo);
   await commitBuf(out.buf,eTag,setSavingUI);
   const saved=book.records.find(r=>r.row===out.row);
-  lsDel('draft');
+  lsDel('draft');resetDraftPhoto();
   toast(`保存しました（「入力」シート ${out.row}行目）`);
   setSavingUI('');
   if(isWide()){draft=draftFrom(saved);snap();renderEditor();renderList()}
@@ -1655,6 +1794,72 @@ $('chartsBtn').onclick=()=>show('charts');
 $('anaView').onclick=()=>show('charts');
 $('chBack').onclick=()=>{if(isWide())show('editor');else show('list')};
 
+/* ---------- 写真 ---------- */
+const PHOTO_MAX=640,PHOTO_QUALITY=0.8;   // 長辺 640px の JPEG（1枚あたり約 50KB）
+let draftPhoto;   // undefined＝変更なし、null＝保存時に削除、{blob,bytes,width,height,url}＝新しい写真
+let photos={buf:null,map:new Map(),zip:null,urls:new Map()};   // 読み込んだファイルの写真（行番号 → 画像）
+function resetDraftPhoto(){if(draftPhoto&&draftPhoto.url)URL.revokeObjectURL(draftPhoto.url);draftPhoto=undefined}
+async function refreshPhotos(){
+ const buf=book&&book.buf;if(photos.buf===buf)return;
+ for(const u of photos.urls.values())URL.revokeObjectURL(u);
+ photos={buf,map:new Map(),zip:null,urls:new Map()};
+ if(!buf)return;
+ try{const zip=await JSZip.loadAsync(buf),map=await readPhotoIndex(zip);if(photos.buf!==buf)return;photos.zip=zip;photos.map=map}
+ catch(e){console.warn('写真の読み込みに失敗',e);return}
+ if(document.body.dataset.view==='detail'&&detailRec)renderDetailPhoto(detailRec);
+ if(draft)renderPhotoField();
+}
+async function photoUrl(row){
+ if(photos.urls.has(row))return photos.urls.get(row);
+ const mp=photos.map.get(row),f=mp&&photos.zip&&photos.zip.file(mp);if(!f)return null;
+ const type={png:'image/png',gif:'image/gif',webp:'image/webp'}[mp.split('.').pop().toLowerCase()]||'image/jpeg';
+ const url=URL.createObjectURL(new Blob([await f.async('uint8array')],{type}));
+ photos.urls.set(row,url);return url;
+}
+async function renderDetailPhoto(r){
+ const url=r?await photoUrl(r.row):null;if(detailRec!==r)return;
+ const img=$('dtPhotoImg');if(url)img.src=url;else img.removeAttribute('src');
+ $('dtPhoto').classList.toggle('hidden',!url);
+}
+async function renderPhotoField(){
+ const d=draft;let url=null;
+ if(draftPhoto)url=draftPhoto.url;
+ else if(draftPhoto===undefined&&d&&!d.isNew)url=await photoUrl(d.target.row);
+ if(d!==draft)return;
+ const img=$('phImg');if(url)img.src=url;else img.removeAttribute('src');
+ img.classList.toggle('hidden',!url);$('phEmpty').classList.toggle('hidden',!!url);
+ $('phEmpty').textContent=draftPhoto===null?'保存すると写真を削除します':'写真なし';
+ $('phPick').textContent=url?'写真を変更':'写真を選ぶ';
+ $('phDel').classList.toggle('hidden',!url);
+}
+// 選んだ写真を長辺 PHOTO_MAX の JPEG にする（向きは端末が写真の情報どおりに補正して描く）
+async function preparePhoto(file){
+ const src=URL.createObjectURL(file);
+ try{
+  const img=new Image();img.src=src;
+  try{await img.decode()}catch{throw new Error('この形式の画像は読み込めません。')}
+  const s=Math.min(1,PHOTO_MAX/Math.max(img.naturalWidth,img.naturalHeight));
+  const w=Math.max(1,Math.round(img.naturalWidth*s)),h=Math.max(1,Math.round(img.naturalHeight*s));
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+  const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('画像を変換できませんでした。')),'image/jpeg',PHOTO_QUALITY));
+  return {blob,bytes:new Uint8Array(await blob.arrayBuffer()),width:w,height:h,url:URL.createObjectURL(blob)};
+ }finally{URL.revokeObjectURL(src)}
+}
+$('phPick').onclick=()=>$('phInput').click();
+$('phInput').onchange=async e=>{
+ const f=e.target.files[0];e.target.value='';if(!f||!draft)return;
+ const btn=$('phPick');btn.disabled=true;btn.textContent='読み込み中…';
+ try{const p=await preparePhoto(f);resetDraftPhoto();draftPhoto=p;changed()}
+ catch(err){showSaveErr('写真を読み込めませんでした：'+err.message)}
+ finally{btn.disabled=false;renderPhotoField()}
+};
+$('phDel').onclick=()=>{
+ resetDraftPhoto();
+ if(draft&&!draft.isNew&&photos.map.has(draft.target.row))draftPhoto=null;
+ changed();renderPhotoField();
+};
+
 /* ---------- 詳細 ---------- */
 function renderDetail(){
  const r=detailRec;if(!r){show('list');return}
@@ -1668,6 +1873,7 @@ function renderDetail(){
  if(r.cluster!=null)tiles.push(['クラスタ',r.cluster]);else tiles.push(['行',r.row]);
  $('dtTiles').innerHTML=tiles.map(([k,v])=>`<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
  const kv=[['style',r.style],['colour',r.colour],['region',r.region],['appearance',r.appearance],['nose',r.nose],['taste',r.taste],['notes',r.notes],['where',r.where]].filter(x=>x[1]);
+ renderDetailPhoto(r);
  $('dtKV').innerHTML=kv.length?kv.map(([k,v])=>`<div><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join(''):'<div><span class="k">コメント</span><span class="v" style="color:var(--sub)">なし</span></div>';
  $('dtSimilar').classList.toggle('hidden',r.cluster==null);
 }
@@ -1806,7 +2012,7 @@ async function loadFromDrive(){
 function applyBook(b){
  book=b;
  if(detailRec){detailRec=findLatest({row:detailRec.row,id:detailRec.id,beer:detailRec.beer,whenRaw:detailRec.whenRaw});if(document.body.dataset.view==='detail')detailRec?renderDetail():show('list')}
- renderSync();renderList();fillDatalists();
+ renderSync();renderList();fillDatalists();refreshPhotos();
  if(document.body.dataset.view==='settings')renderSettings();
  if(document.body.dataset.view==='charts')renderCharts();
  if(draft)renderEditorChrome();
