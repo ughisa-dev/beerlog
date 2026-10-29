@@ -1012,13 +1012,17 @@ let saving=false;
 let pendingExport=null;
 
 /* ---------- 画面遷移 ---------- */
+// 一覧を離れるときのスクロール位置。一覧に戻ったら同じ場所を表示する（iPhone 表示のとき）
+let listScroll=0;
 function show(view){
+ if(document.body.dataset.view==='list'&&view!=='list')listScroll=window.scrollY;
  document.body.dataset.view=view;
  if(view==='editor')renderEditor();
  if(view==='detail')renderDetail();
  if(view==='settings')renderSettings();
  if(view==='charts')renderCharts();
- if(!isWide()||view!=='editor')window.scrollTo(0,0);
+ if(view==='list'&&!isWide()){const y=listScroll;window.scrollTo(0,y);requestAnimationFrame(()=>window.scrollTo(0,y))}
+ else if(!isWide()||view!=='editor')window.scrollTo(0,0);
 }
 function setStep(n){step=n;document.body.dataset.step=n;renderEditorChrome();window.scrollTo(0,0)}
 
@@ -1670,7 +1674,7 @@ function renderDetail(){
 $('dtBack').onclick=()=>{detailRec=null;show('list')};
 $('dtEdit').onclick=()=>startEdit(detailRec);
 $('dtDup').onclick=$('dtAgain').onclick=()=>startNew(detailRec);
-$('dtSimilar').onclick=()=>{clusterFilter=detailRec.cluster;sortMode='new';query='';$('searchInput').value='';detailRec=null;show('list');renderList()};
+$('dtSimilar').onclick=()=>{clusterFilter=detailRec.cluster;sortMode='new';query='';$('searchInput').value='';detailRec=null;listScroll=0;renderList();show('list')};
 
 /* ---------- ボタン：一覧 ---------- */
 $('newBtn').onclick=()=>startNew();
