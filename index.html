@@ -524,6 +524,9 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
  </div>
  <input id="fileInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
 
+ <div class="sec"><span>前回の保存にかかった時間</span><span id="timingWhen"></span></div>
+ <div class="group cols" id="timingBox"><div><span></span><span>まだ保存していません</span></div></div>
+
  <div class="sec"><span>クラスタ分析</span><span>Python版と同じ計算</span></div>
  <div class="group">
   <div class="it"><span class="main"><b>現在の結果</b><span id="anaSummary">ファイル未読み込み</span></span></div>
@@ -639,7 +642,7 @@ function toStr(x){return x==null?'':String(x)}
 
 // SheetJS で「入力」シートを読む。各記録に Excel の行番号 row を付ける
 function parseBook(buf){
- const wb=XLSX.read(buf,{type:'array',cellDates:false,cellFormula:false,cellHTML:false,cellStyles:false});
+ const wb=XLSX.read(buf,{type:'array',cellDates:false,cellFormula:false,cellHTML:false,cellStyles:false,sheets:[SHEET_NAME,ANALYSIS_SHEETS.weights]});
  const ws=wb.Sheets[SHEET_NAME];
  if(!ws)throw new Error('「入力」シートが見つかりません。');
  const range=XLSX.utils.decode_range(ws['!ref']||'A1:A1');
@@ -1470,23 +1473,44 @@ function setSavingUI(text){
 }
 
 /* ---------- 保存 ---------- */
-// 書き込み直前に最新を取り直す。他の端末で内容が変わっていれば ConflictError
-async function fetchLatest(progress){
- if(book.source!=='onedrive'){progress('保存中…');return {buf:book.buf,eTag:null}}
- progress('最新のファイルを確認中…');
- const meta=await driveMeta(book.path);
- if(meta.cTag&&book.cTag?meta.cTag!==book.cTag:meta.eTag!==book.eTag)throw new ConflictError('');
- return {buf:await driveDownload(meta),eTag:meta.eTag};
+// 保存にかかった時間を段階ごとに測る
+function stopwatch(){
+ const t0=performance.now();let last=t0;const parts=[];
+ return {parts,lap(label){const n=performance.now();parts.push([label,n-last]);last=n},total:()=>performance.now()-t0};
 }
-// 書き換えたファイルを OneDrive へアップロード（端末のファイルなら書き出し）して、読み込み直す
-async function commitBuf(buf,eTag,progress){
+function saveTiming(kind,sw,bytes){
+ const rec={kind,at:new Date().toISOString(),total:sw.total(),parts:sw.parts,bytes};
+ lsSet('lastSaveTiming',JSON.stringify(rec));
+ return rec;
+}
+const fmtSec=ms=>(ms/1000).toFixed(1)+'秒';
+// 書き換えたファイルを OneDrive へアップロード（端末のファイルなら書き出し）して、読み込み直す。
+// 保存の前にファイルを取り直さず、読み込んだときの eTag を If-Match に付けて送る。
+// 他で変更されていれば OneDrive が 412 を返すので上書きしない。
+// 内容は同じで eTag だけ変わっていた場合（cTag が同じ）は、新しい eTag で送り直す。
+async function commitBuf(buf,progress,sw){
  if(book.source==='onedrive'){
   progress('OneDriveへアップロード中…');
-  const item=await driveUpload(book.path,buf,eTag);
+  await token();sw.lap('認証');
+  let item;
+  try{item=await driveUpload(book.path,buf,book.eTag)}
+  catch(e){
+   if(!(e instanceof ConflictError))throw e;
+   sw.lap('アップロード（412）');
+   progress('変更の有無を確認中…');
+   const meta=await driveMeta(book.path);
+   if(!(meta.cTag&&book.cTag&&meta.cTag===book.cTag))throw e;
+   sw.lap('変更の確認');
+   progress('OneDriveへアップロード中…');
+   item=await driveUpload(book.path,buf,meta.eTag);
+  }
+  sw.lap('アップロード');
   book.eTag=item.eTag;book.cTag=item.cTag;
  }
+ progress('画面を更新中…');
  applyBook(Object.assign(book,{buf,syncedAt:new Date()},parseBook(buf)));
- if(book.source==='local')await exportLocal(buf,book.name);
+ sw.lap('読み直し・画面更新');
+ if(book.source==='local'){await exportLocal(buf,book.name);sw.lap('書き出し')}
 }
 async function saveDraft(){
  if(saving||analyzing||!draft)return;
@@ -1494,17 +1518,18 @@ async function saveDraft(){
  if(!draft.beer.trim()){if(!isWide())setStep(1);return showSaveErr('beer（ビール名）を入力してください。')}
  if(!book)return showSaveErr('Excelファイルが読み込まれていません。設定から読み込んでください。');
  try{
-  const {buf:latestBuf,eTag}=await fetchLatest(setSavingUI);
-  const latest=parseBook(latestBuf);
-  const row=locateRow(latest.records,draft);
+  const sw=stopwatch();
   setSavingUI('書き込み中…');
+  const row=locateRow(book.records,draft);
   const rec=draftToRecord(draft);
   const photo=draftPhoto===undefined?undefined:draftPhoto&&{bytes:draftPhoto.bytes,width:draftPhoto.width,height:draftPhoto.height};
-  const out=await patchWorkbook(latestBuf,rec,row,photo);
-  await commitBuf(out.buf,eTag,setSavingUI);
+  const out=await patchWorkbook(book.buf,rec,row,photo);
+  sw.lap('Excelの書き換え');
+  await commitBuf(out.buf,setSavingUI,sw);
   const saved=book.records.find(r=>r.row===out.row);
   lsDel('draft');resetDraftPhoto();
-  toast(`保存しました（「入力」シート ${out.row}行目）`);
+  const tm=saveTiming('記録の保存',sw,out.buf.byteLength);
+  toast(`保存しました（${out.row}行目・${fmtSec(tm.total)}）`);
   setSavingUI('');
   if(isWide()){draft=draftFrom(saved);snap();renderEditor();renderList()}
   else{draft=null;detailRec=saved;show('detail');renderList()}
@@ -1724,9 +1749,7 @@ async function regenerateAnalysis(){
  analyzing=true;anaMsg('');
  const btn=$('anaBtn'),prog=t=>{btn.textContent=t};btn.disabled=true;
  try{
-  const {buf,eTag}=await fetchLatest(prog);
-  prog('計算中…');await nextFrame();
-  const A=parseBook(buf).analysis;
+  const sw=stopwatch(),buf=book.buf,A=book.analysis;
   if(!A)throw new Error('分析できる記録が2件未満です。');
   const targets=await inspectAnalysisImages(buf),images={};
   const jobs=[['dendro','樹形図',drawDendrogram],['bertinImg','Bertin図',drawBertin],['pca','PCAプロット',drawPCA]];
@@ -1735,10 +1758,13 @@ async function regenerateAnalysis(){
    const c=key==='dendro'?drawDendrogram(A,dendroSize(A,pixelBudget())):(({w,h})=>draw(A,w,h))(imageSize(targets[key]));
    images[key]=await canvasPng(c);
   }
+  sw.lap('図の作成');
   prog('Excelに書き込み中…');await nextFrame();
   const out=await writeAnalysis(buf,A,images);
-  await commitBuf(out,eTag,prog);
-  toast('分析を再生成しました');
+  sw.lap('Excelの書き換え');
+  await commitBuf(out,prog,sw);
+  const tm=saveTiming('分析の再生成',sw,out.byteLength);
+  toast(`分析を再生成しました（${fmtSec(tm.total)}）`);
   anaMsg(`分析を再生成しました（${A.names.length}件）。`,'info');
  }catch(e){
   console.error(e);
@@ -1891,7 +1917,16 @@ $('settingsBtn').onclick=()=>show('settings');
 $('clientId').value=lsGet('clientId');
 $('drivePath').value=lsGet('drivePath');
 $('thisUrl').textContent=location.origin+location.pathname;
+function renderTiming(){
+ let t=null;try{t=JSON.parse(lsGet('lastSaveTiming','null'))}catch{}
+ if(!t){$('timingWhen').textContent='';return}
+ const d=new Date(t.at);
+ $('timingWhen').textContent=`${t.kind}・${fmtTime(d)}`;
+ $('timingBox').innerHTML=t.parts.map(([k,ms])=>`<div><span>${fmtSec(ms)}</span><span>${esc(k)}</span></div>`).join('')+
+  `<hr><div class="new"><span>${fmtSec(t.total)}</span><span>合計（ファイル ${(t.bytes/1048576).toFixed(1)}MB）</span></div>`;
+}
 function renderSettings(){
+ renderTiming();
  const mode=lsGet('mode','onedrive');
  $('radioDrive').classList.toggle('on',mode==='onedrive');$('radioLocal').classList.toggle('on',mode==='local');
  $('drivePanel').classList.toggle('hidden',mode!=='onedrive');$('localPanel').classList.toggle('hidden',mode!=='local');
