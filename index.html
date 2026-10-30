@@ -274,6 +274,8 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
 .chart-box.dendro.zoomed img{width:auto;height:100%;max-width:none}
 .chart-box.pca.zoomed img{width:300%;max-width:none}
 .chart-wait{padding:48px 16px;text-align:center;color:#6b6157;font-size:14px}
+#upStatus{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:85;display:flex;align-items:center;gap:8px;background:#2D2419;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--fg);max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#upStatus .dot{width:8px;height:8px;border-radius:50%;background:var(--acc);animation:blink 1s infinite;flex:0 0 auto}
 #toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2D2419;border:1px solid var(--line);color:var(--fg);padding:10px 18px;border-radius:999px;font-size:14px;z-index:80;max-width:90vw;text-align:center}
 
 /* ---- Mac／Windows（幅 900px 以上） ---- */
@@ -510,7 +512,9 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
     <div class="row"><button class="btn-s acc" id="loadDriveBtn">このファイルを読み込む</button><button class="btn-s" id="clearDrivePathHistory">パス履歴を消去</button></div>
    </div>
    <div class="it"><span class="main"><b>書き込みシート</b></span><span class="side" id="sheetInfo">入力</span></div>
+   <div class="pad hidden" id="migBox"><div class="tiny" id="migText" style="margin-bottom:8px"></div><button class="btn-s" id="migBtn" style="width:100%">Excel 内の写真を軽くする</button></div>
   </div>
+  <p class="note">保存を速くするため、Excel には小さい写真と軽い分析画像だけを入れます。元の写真は Excel と同じ場所の「ビールログ写真」フォルダ（ファイル名は記録ID）に、高画質の分析画像は「ビールログ分析」フォルダに保存します。</p>
  </div>
 
  <div id="localPanel">
@@ -600,6 +604,7 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
   <div id="pickerList"></div>
  </div>
 </div>
+<div id="upStatus" class="hidden" role="status"><span class="dot"></span><span id="upStatusText"></span></div>
 <div id="toast" class="hidden"></div>
 
 <datalist id="dlBeer"></datalist><datalist id="dlStyle"></datalist><datalist id="dlProducer"></datalist><datalist id="dlCountry"></datalist><datalist id="dlRegion"></datalist><datalist id="dlWhere"></datalist>
@@ -837,6 +842,15 @@ function parseRowList(inner,name){
  return rows;
 }
 
+// 複数の行の写真をまとめて差し替える（list：[{row, photo, label}]）
+async function patchPhotos(buf,list){
+ const zip=await JSZip.loadAsync(buf);
+ const {sheetPath}=await resolveSheet(zip,SHEET_NAME);
+ let xml=await zipText(zip,sheetPath);
+ for(const x of list)xml=await setRowPhoto(zip,sheetPath,xml,x.row,x.photo,x.label);
+ zip.file(sheetPath,xml,{createFolders:false});
+ return zip.generateAsync({type:'arraybuffer',compression:'DEFLATE'});
+}
 // 「入力」シートの1行（A〜AB）だけを書き換えた新しい xlsx を返す。targetRow が null なら最終データ行の次に追加。
 // photo：undefined＝写真はそのまま、null＝その行の写真を削除、{bytes,width,height}＝その行の写真を差し替え
 async function patchWorkbook(buf,rec,targetRow,photo){
@@ -1276,6 +1290,7 @@ $('clusterClear').onclick=()=>{clusterFilter=null;renderList()};
 function renderSync(){
  const el=$('syncLine');el.className='sync';
  if(!book){$('syncText').textContent=lsGet('mode','onedrive')==='local'?'この端末：ファイル未選択':'OneDrive：未接続';return}
+ if(book.uploading){el.classList.add('busy');$('syncText').textContent=`OneDrive／${book.name} に保存中…`;return}
  if(book.source==='onedrive'){el.classList.add('ok');$('syncText').textContent=`OneDrive／${book.name} に同期済み・${fmtTime(book.syncedAt)}`}
  else{el.classList.add('local');$('syncText').textContent=`この端末／${book.name}・${fmtTime(book.syncedAt)}`}
 }
@@ -1488,23 +1503,22 @@ const fmtSec=ms=>(ms/1000).toFixed(1)+'秒';
 // 保存の前にファイルを取り直さず、読み込んだときの eTag を If-Match に付けて送る。
 // 他で変更されていれば OneDrive が 412 を返すので上書きしない。
 // 内容は同じで eTag だけ変わっていた場合（cTag が同じ）は、新しい eTag で送り直す。
+async function uploadExcel(buf,eTag,cTag,sw){
+ try{const item=await driveUpload(book.path,buf,eTag);sw.lap('アップロード');return item}
+ catch(e){
+  if(!(e instanceof ConflictError))throw e;
+  sw.lap('アップロード（412）');
+  const meta=await driveMeta(book.path);
+  if(!(meta.cTag&&cTag&&meta.cTag===cTag))throw e;
+  sw.lap('変更の確認');
+  const item=await driveUpload(book.path,buf,meta.eTag);sw.lap('アップロード');return item;
+ }
+}
 async function commitBuf(buf,progress,sw){
  if(book.source==='onedrive'){
   progress('OneDriveへアップロード中…');
   await token();sw.lap('認証');
-  let item;
-  try{item=await driveUpload(book.path,buf,book.eTag)}
-  catch(e){
-   if(!(e instanceof ConflictError))throw e;
-   sw.lap('アップロード（412）');
-   progress('変更の有無を確認中…');
-   const meta=await driveMeta(book.path);
-   if(!(meta.cTag&&book.cTag&&meta.cTag===book.cTag))throw e;
-   sw.lap('変更の確認');
-   progress('OneDriveへアップロード中…');
-   item=await driveUpload(book.path,buf,meta.eTag);
-  }
-  sw.lap('アップロード');
+  const item=await uploadExcel(buf,book.eTag,book.cTag,sw);
   book.eTag=item.eTag;book.cTag=item.cTag;
  }
  progress('画面を更新中…');
@@ -1512,27 +1526,46 @@ async function commitBuf(buf,progress,sw){
  sw.lap('読み直し・画面更新');
  if(book.source==='local'){await exportLocal(buf,book.name);sw.lap('書き出し')}
 }
+// OneDrive への保存は、Excel を書き換えたらすぐ画面を進め、アップロードは裏で行う（pendingUpload）。
+// 送っている間は次の保存を待たせる。失敗したら読み込み時の状態に戻し、入力内容を取り戻せるようにする。
+let pendingUpload=null,failedSave=null;
+function upStatus(t){$('upStatusText').textContent=t||'';$('upStatus').classList.toggle('hidden',!t)}
+function finishSave(row){
+ const saved=book.records.find(r=>r.row===row);
+ lsDel('draft');setSavingUI('');
+ if(isWide()){draft=draftFrom(saved);snap();renderEditor();renderList()}
+ else{draft=null;detailRec=saved;show('detail');renderList()}
+}
 async function saveDraft(){
  if(saving||analyzing||!draft)return;
  clearSaveErr();
  if(!draft.beer.trim()){if(!isWide())setStep(1);return showSaveErr('beer（ビール名）を入力してください。')}
  if(!book)return showSaveErr('Excelファイルが読み込まれていません。設定から読み込んでください。');
+ if(pendingUpload){setSavingUI('前の保存の送信を待っています…');await pendingUpload;setSavingUI('');if(!draft||!book)return}
  try{
-  const sw=stopwatch();
+  const sw=stopwatch(),drive=book.source==='onedrive';
+  // ログインのやり直しが必要なら、画面を進める前にここで済ませる（入力中の内容は保存される）
+  if(drive){setSavingUI('認証中…');await token();sw.lap('認証')}
   setSavingUI('書き込み中…');
   const row=locateRow(book.records,draft);
-  const rec=draftToRecord(draft);
-  const photo=draftPhoto===undefined?undefined:draftPhoto&&{bytes:draftPhoto.bytes,width:draftPhoto.width,height:draftPhoto.height};
-  const out=await patchWorkbook(book.buf,rec,row,photo);
+  const rec=draftToRecord(draft),ph=draftPhoto;
+  const out=await patchWorkbook(book.buf,rec,row,ph===undefined?undefined:ph&&(drive?ph.thumb:ph.full));
   sw.lap('Excelの書き換え');
-  await commitBuf(out.buf,setSavingUI,sw);
-  const saved=book.records.find(r=>r.row===out.row);
-  lsDel('draft');resetDraftPhoto();
-  const tm=saveTiming('記録の保存',sw,out.buf.byteLength);
-  toast(`保存しました（${out.row}行目・${fmtSec(tm.total)}）`);
-  setSavingUI('');
-  if(isWide()){draft=draftFrom(saved);snap();renderEditor();renderList()}
-  else{draft=null;detailRec=saved;show('detail');renderList()}
+  if(drive){
+   const snapshot={book:{...book},draft:JSON.parse(JSON.stringify(draft)),draftSnapshot,photo:ph};
+   if(ph)fullPhotos.set(rec.id,Promise.resolve(ph.url));else if(ph===null)fullPhotos.set(rec.id,Promise.resolve(null));
+   draftPhoto=undefined;   // 写真の URL は fullPhotos に引き継ぐ
+   applyBook(Object.assign(book,{buf:out.buf,uploading:true},parseBook(out.buf)));
+   sw.lap('読み直し・画面更新');
+   finishSave(out.row);
+   pendingUpload=backgroundUpload({buf:out.buf,id:rec.id,ph,snapshot,sw,row:out.row});
+  }else{
+   await commitBuf(out.buf,setSavingUI,sw);
+   resetDraftPhoto();
+   const tm=saveTiming('記録の保存',sw,out.buf.byteLength);
+   toast(`保存しました（${out.row}行目・${fmtSec(tm.total)}）`);
+   finishSave(out.row);
+  }
  }catch(e){
   console.error(e);setSavingUI('');
   if(e instanceof ConflictError){
@@ -1542,6 +1575,38 @@ async function saveDraft(){
   }else if(e&&e.redirecting){/* ログイン画面へ移動中 */}
   else showSaveErr(e.message||String(e));
  }
+}
+async function backgroundUpload({buf,id,ph,snapshot,sw,row}){
+ upStatus(`保存中…（${(buf.byteLength/1048576).toFixed(1)}MB を送信）`);renderSync();
+ try{
+  if(ph&&id){await drivePut(photoPath(id),ph.full.bytes,'image/jpeg');sw.lap('写真のアップロード')}
+  else if(ph===null&&id){await driveDelete(photoPath(id));sw.lap('写真の削除')}
+  const item=await uploadExcel(buf,snapshot.book.eTag,snapshot.book.cTag,sw);
+  if(book.buf===buf){book.eTag=item.eTag;book.cTag=item.cTag;book.syncedAt=new Date()}
+  const tm=saveTiming('記録の保存',sw,buf.byteLength);
+  toast(`保存しました（${row}行目・${fmtSec(tm.total)}）`);
+ }catch(e){
+  console.error(e);
+  // 読み込み時の状態に戻す（アプリの表示を、OneDrive 上のファイルと合わせる）
+  Object.assign(book,snapshot.book);applyBook(book);
+  if(ph&&id)fullPhotos.delete(id);
+  failedSave={draft:snapshot.draft,draftSnapshot:snapshot.draftSnapshot,photo:ph};
+  lsSet('draft',JSON.stringify({draft:snapshot.draft,snap:snapshot.draftSnapshot,step:3}));
+  const conflict=e instanceof ConflictError;
+  banner((conflict?'他の端末で変更されていたため、保存できませんでした。':'保存できませんでした：'+(e.message||e))+'\n入力した内容は残っています。「入力内容に戻る」から保存し直してください。',
+   {actions:[{label:'入力内容に戻る',fn:()=>{banner('');restoreFailedSave(conflict)}}]});
+ }finally{
+  if(book)book.uploading=false;
+  pendingUpload=null;upStatus('');renderSync();
+ }
+}
+async function restoreFailedSave(conflict){
+ const f=failedSave;if(!f)return;
+ if(draft&&isDirty()&&!confirm('編集中の内容を破棄して、保存できなかった入力内容に戻りますか？'))return;
+ failedSave=null;resetDraftPhoto();
+ draft=f.draft;draftSnapshot=f.draftSnapshot;draftPhoto=f.photo;
+ sel=1;setStep(3);show('editor');
+ if(conflict)await reloadKeepingDraft();
 }
 // 最新のファイルで、読み込み時と同じ記録を探す（ID → 行番号＋ビール名・日付 → ビール名・日付が一意）
 function findLatest(t){
@@ -1742,6 +1807,15 @@ const nextFrame=()=>new Promise(r=>setTimeout(r,30));
 /* ---------- 分析の再生成 ---------- */
 let analyzing=false;
 function anaMsg(t,type='err'){const el=$('anaMsg');el.textContent=t||'';el.className='msg'+(type==='info'?' info':'')+(t?'':' hidden');el.style.margin='12px 0 0'}
+// Excel に入れる分析画像の縮小率（OneDrive のときだけ。高画質版は「ビールログ分析」フォルダに置く）
+const EXCEL_IMAGE_SCALE={dendro:0.5,bertinImg:1,pca:0.5};
+const ANALYSIS_FILES={dendro:'樹形図.png',bertinImg:'Bertin図.png',pca:'PCAプロット.png'};
+function downscaleCanvas(c,s){
+ if(s>=1)return c;
+ const d=document.createElement('canvas');d.width=Math.max(1,Math.round(c.width*s));d.height=Math.max(1,Math.round(c.height*s));
+ const x=d.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(c,0,0,d.width,d.height);
+ return d;
+}
 async function regenerateAnalysis(){
  if(analyzing||saving)return;
  if(!book)return anaMsg('Excelファイルが読み込まれていません。');
@@ -1749,16 +1823,24 @@ async function regenerateAnalysis(){
  analyzing=true;anaMsg('');
  const btn=$('anaBtn'),prog=t=>{btn.textContent=t};btn.disabled=true;
  try{
-  const sw=stopwatch(),buf=book.buf,A=book.analysis;
+  if(pendingUpload){prog('前の保存の送信を待っています…');await pendingUpload}
+  const sw=stopwatch(),buf=book.buf,A=book.analysis,drive=book.source==='onedrive';
   if(!A)throw new Error('分析できる記録が2件未満です。');
-  const targets=await inspectAnalysisImages(buf),images={};
+  if(drive){await token();sw.lap('認証')}
+  const targets=await inspectAnalysisImages(buf),images={},hq={};
   const jobs=[['dendro','樹形図',drawDendrogram],['bertinImg','Bertin図',drawBertin],['pca','PCAプロット',drawPCA]];
   for(let i=0;i<jobs.length;i++){
    const [key,label,draw]=jobs[i];prog(`図を作成中…（${i+1}/3 ${label}）`);await nextFrame();
    const c=key==='dendro'?drawDendrogram(A,dendroSize(A,pixelBudget())):(({w,h})=>draw(A,w,h))(imageSize(targets[key]));
-   images[key]=await canvasPng(c);
+   if(drive&&EXCEL_IMAGE_SCALE[key]<1){images[key]=await canvasPng(downscaleCanvas(c,EXCEL_IMAGE_SCALE[key]));hq[key]=await canvasBlob(c)}
+   else{const blob=await canvasBlob(c);images[key]=new Uint8Array(await blob.arrayBuffer());if(drive)hq[key]=blob}
   }
   sw.lap('図の作成');
+  if(drive){
+   prog('高画質の図を保存中…');
+   for(const key in hq)await drivePut(analysisPath(ANALYSIS_FILES[key]),hq[key],'image/png');
+   sw.lap('高画質の図のアップロード');
+  }
   prog('Excelに書き込み中…');await nextFrame();
   const out=await writeAnalysis(buf,A,images);
   sw.lap('Excelの書き換え');
@@ -1821,8 +1903,14 @@ $('anaView').onclick=()=>show('charts');
 $('chBack').onclick=()=>{if(isWide())show('editor');else show('list')};
 
 /* ---------- 写真 ---------- */
-const PHOTO_MAX=640,PHOTO_QUALITY=0.8;   // 長辺 640px の JPEG（1枚あたり約 50KB）
-let draftPhoto;   // undefined＝変更なし、null＝保存時に削除、{blob,bytes,width,height,url}＝新しい写真
+const PHOTO_MAX=640,PHOTO_QUALITY=0.8;        // 元の写真：長辺 640px の JPEG
+const PHOTO_THUMB=160,PHOTO_THUMB_QUALITY=0.7; // Excel に貼る写真（OneDrive のとき）：長辺 160px
+const PHOTO_DIR='ビールログ写真',ANALYSIS_DIR='ビールログ分析';
+function bookDir(){const p=book.path||'';return p.slice(0,p.lastIndexOf('/'))}
+const photoPath=id=>`${bookDir()}/${PHOTO_DIR}/${id}.jpg`;
+const analysisPath=name=>`${bookDir()}/${ANALYSIS_DIR}/${name}`;
+let draftPhoto;   // undefined＝変更なし、null＝保存時に削除、{full,thumb,url}＝新しい写真（full／thumb は {blob,bytes,width,height}）
+const fullPhotos=new Map();   // 記録ID → 元の写真の URL（Promise）。OneDrive の「ビールログ写真」から読む
 let photos={buf:null,map:new Map(),zip:null,urls:new Map()};   // 読み込んだファイルの写真（行番号 → 画像）
 function resetDraftPhoto(){if(draftPhoto&&draftPhoto.url)URL.revokeObjectURL(draftPhoto.url);draftPhoto=undefined}
 async function refreshPhotos(){
@@ -1834,6 +1922,7 @@ async function refreshPhotos(){
  catch(e){console.warn('写真の読み込みに失敗',e);return}
  if(document.body.dataset.view==='detail'&&detailRec)renderDetailPhoto(detailRec);
  if(draft)renderPhotoField();
+ if(document.body.dataset.view==='settings')renderMigrate();
 }
 async function photoUrl(row){
  if(photos.urls.has(row))return photos.urls.get(row);
@@ -1842,36 +1931,109 @@ async function photoUrl(row){
  const url=URL.createObjectURL(new Blob([await f.async('uint8array')],{type}));
  photos.urls.set(row,url);return url;
 }
-async function renderDetailPhoto(r){
- const url=r?await photoUrl(r.row):null;if(detailRec!==r)return;
- const img=$('dtPhotoImg');if(url)img.src=url;else img.removeAttribute('src');
- $('dtPhoto').classList.toggle('hidden',!url);
+// 元の写真（OneDrive の「ビールログ写真」フォルダ）。Excel に写真がある記録だけ読みに行く
+function fullPhotoUrl(rec,hasThumb){
+ if(!rec||!rec.id)return null;
+ if(fullPhotos.has(rec.id))return fullPhotos.get(rec.id);
+ if(!hasThumb||!book||book.source!=='onedrive')return null;
+ const p=driveGetBlob(photoPath(rec.id)).then(b=>b?URL.createObjectURL(b):null).catch(e=>{console.warn(e);fullPhotos.delete(rec.id);return null});
+ fullPhotos.set(rec.id,p);return p;
+}
+// 記録の写真：まず Excel 内の写真を出し、元の写真が読めたら差し替える
+async function showRecordPhoto(rec,row,apply){
+ const thumb=row!=null?await photoUrl(row):null;
+ const full=fullPhotoUrl(rec,!!thumb);
+ if(!apply(thumb||null))return;
+ const url=full&&await full;
+ if(url)apply(url);
+}
+function renderDetailPhoto(r){
+ return showRecordPhoto(r,r&&r.row,url=>{
+  if(detailRec!==r)return false;
+  const img=$('dtPhotoImg');if(url)img.src=url;else img.removeAttribute('src');
+  $('dtPhoto').classList.toggle('hidden',!url);return true;
+ });
 }
 async function renderPhotoField(){
- const d=draft;let url=null;
- if(draftPhoto)url=draftPhoto.url;
- else if(draftPhoto===undefined&&d&&!d.isNew)url=await photoUrl(d.target.row);
- if(d!==draft)return;
- const img=$('phImg');if(url)img.src=url;else img.removeAttribute('src');
- img.classList.toggle('hidden',!url);$('phEmpty').classList.toggle('hidden',!!url);
- $('phEmpty').textContent=draftPhoto===null?'保存すると写真を削除します':'写真なし';
- $('phPick').textContent=url?'写真を変更':'写真を選ぶ';
- $('phDel').classList.toggle('hidden',!url);
+ const d=draft;
+ const apply=url=>{
+  if(d!==draft)return false;
+  const img=$('phImg');if(url)img.src=url;else img.removeAttribute('src');
+  img.classList.toggle('hidden',!url);$('phEmpty').classList.toggle('hidden',!!url);
+  $('phEmpty').textContent=draftPhoto===null?'保存すると写真を削除します':'写真なし';
+  $('phPick').textContent=url?'写真を変更':'写真を選ぶ';
+  $('phDel').classList.toggle('hidden',!url);return true;
+ };
+ if(draftPhoto)return apply(draftPhoto.url);
+ if(draftPhoto===null||!d||d.isNew)return apply(null);
+ const rec=findLatest(d.target);
+ return showRecordPhoto(rec,rec?rec.row:d.target.row,apply);
 }
-// 選んだ写真を長辺 PHOTO_MAX の JPEG にする（向きは端末が写真の情報どおりに補正して描く）
-async function preparePhoto(file){
- const src=URL.createObjectURL(file);
+// 画像を長辺 max の JPEG にする（向きは端末が写真の情報どおりに補正して描く）
+async function shrinkJpeg(src,max,quality){
+ const u=URL.createObjectURL(src);
  try{
-  const img=new Image();img.src=src;
+  const img=new Image();img.src=u;
   try{await img.decode()}catch{throw new Error('この形式の画像は読み込めません。')}
-  const s=Math.min(1,PHOTO_MAX/Math.max(img.naturalWidth,img.naturalHeight));
+  const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
   const w=Math.max(1,Math.round(img.naturalWidth*s)),h=Math.max(1,Math.round(img.naturalHeight*s));
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
-  const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('画像を変換できませんでした。')),'image/jpeg',PHOTO_QUALITY));
-  return {blob,bytes:new Uint8Array(await blob.arrayBuffer()),width:w,height:h,url:URL.createObjectURL(blob)};
- }finally{URL.revokeObjectURL(src)}
+  const blob=await new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('画像を変換できませんでした。')),'image/jpeg',quality));
+  return {blob,bytes:new Uint8Array(await blob.arrayBuffer()),width:w,height:h};
+ }finally{URL.revokeObjectURL(u)}
 }
+async function preparePhoto(file){
+ const full=await shrinkJpeg(file,PHOTO_MAX,PHOTO_QUALITY);
+ const thumb=await shrinkJpeg(full.blob,PHOTO_THUMB,PHOTO_THUMB_QUALITY);
+ return {full,thumb,url:URL.createObjectURL(full.blob)};
+}
+
+/* Excel 内の大きい写真（以前の保存方式）を小さくし、元の写真をフォルダへ移す */
+async function heavyPhotos(){
+ if(!book||!photos.zip||photos.buf!==book.buf)return [];
+ const out=[];
+ for(const [row,mp] of photos.map){
+  const f=photos.zip.file(mp),size=f&&f._data&&f._data.uncompressedSize;
+  const rec=book.records.find(r=>r.row===row);
+  if(size>20000&&rec&&rec.id)out.push({row,mp,rec,size});
+ }
+ return out;
+}
+async function renderMigrate(){
+ const box=$('migBox');
+ if(!book||book.source!=='onedrive'){box.classList.add('hidden');return}
+ const list=await heavyPhotos();
+ box.classList.toggle('hidden',!list.length);
+ if(list.length)$('migText').textContent=`Excel 内に大きい写真が ${list.length}枚（約${(list.reduce((s,x)=>s+x.size,0)/1048576).toFixed(1)}MB）あります。小さくすると保存が速くなります（元の写真は「${PHOTO_DIR}」フォルダへ移します）。`;
+}
+async function migratePhotos(){
+ if(saving||analyzing||pendingUpload||!book||book.source!=='onedrive')return;
+ const list=await heavyPhotos();if(!list.length)return;
+ if(!confirm(`Excel 内の写真${list.length}枚を小さくし、元の写真は OneDrive の「${PHOTO_DIR}」フォルダに保存します。よろしいですか？`))return;
+ analyzing=true;const btn=$('migBtn'),prog=t=>{btn.textContent=t};btn.disabled=true;
+ try{
+  const sw=stopwatch();await token();sw.lap('認証');
+  const items=[];
+  for(let i=0;i<list.length;i++){
+   const x=list[i];prog(`写真を移動中…（${i+1}/${list.length}）`);
+   const bytes=await photos.zip.file(x.mp).async('uint8array');
+   await drivePut(photoPath(x.rec.id),bytes,'image/jpeg');
+   items.push({row:x.row,label:x.rec.beer,photo:await shrinkJpeg(new Blob([bytes],{type:'image/jpeg'}),PHOTO_THUMB,PHOTO_THUMB_QUALITY)});
+  }
+  sw.lap('写真のアップロード');
+  prog('Excelに書き込み中…');
+  const out=await patchPhotos(book.buf,items);sw.lap('Excelの書き換え');
+  await commitBuf(out,prog,sw);
+  const tm=saveTiming('写真を軽くする',sw,out.byteLength);
+  toast(`写真${items.length}枚を軽くしました（${fmtSec(tm.total)}）`);
+ }catch(e){
+  console.error(e);
+  if(e instanceof ConflictError)banner('他の端末で変更されています。読み込み直してから、もう一度実行してください。',{actions:[{label:'読み込み直す',fn:()=>{banner('');loadFromDrive()}}]});
+  else if(!e.redirecting)setMsg('写真を軽くできませんでした：'+(e.message||e));
+ }finally{analyzing=false;btn.disabled=false;btn.textContent='Excel 内の写真を軽くする';renderSettings()}
+}
+$('migBtn').onclick=migratePhotos;
 $('phPick').onclick=()=>$('phInput').click();
 $('phInput').onchange=async e=>{
  const f=e.target.files[0];e.target.value='';if(!f||!draft)return;
@@ -1926,7 +2088,7 @@ function renderTiming(){
   `<hr><div class="new"><span>${fmtSec(t.total)}</span><span>合計（ファイル ${(t.bytes/1048576).toFixed(1)}MB）</span></div>`;
 }
 function renderSettings(){
- renderTiming();
+ renderTiming();renderMigrate();
  const mode=lsGet('mode','onedrive');
  $('radioDrive').classList.toggle('on',mode==='onedrive');$('radioLocal').classList.toggle('on',mode==='local');
  $('drivePanel').classList.toggle('hidden',mode!=='onedrive');$('localPanel').classList.toggle('hidden',mode!=='local');
@@ -2020,6 +2182,30 @@ async function driveDownload(meta){
  if(!r.ok)throw await graphErr(r,'OneDrive からダウンロードできませんでした');
  return r.arrayBuffer();
 }
+// 写真・分析画像などのファイルを置く（フォルダが無ければ作ってからもう一度送る）
+async function ensureFolder(dir){
+ const i=dir.lastIndexOf('/'),parent=dir.slice(0,i),name=dir.slice(i+1);
+ const url=parent?driveUrl(parent)+':/children':GRAPH+'/me/drive/root/children';
+ const r=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},body:JSON.stringify({name,folder:{},'@microsoft.graph.conflictBehavior':'fail'})});
+ if(!r.ok&&r.status!==409)throw await graphErr(r,`OneDrive にフォルダ「${name}」を作れませんでした`);
+}
+async function drivePut(path,data,type){
+ const send=async()=>fetch(driveUrl(path)+':/content',{method:'PUT',headers:{Authorization:'Bearer '+await token(),'Content-Type':type},body:data});
+ let r=await send();
+ if(r.status===404||r.status===409){await ensureFolder(path.slice(0,path.lastIndexOf('/')));r=await send()}
+ if(!r.ok)throw await graphErr(r,'OneDrive へのファイルの保存に失敗しました');
+ return r.json();
+}
+async function driveGetBlob(path){
+ const r=await fetch(driveUrl(path)+':/content',{headers:{Authorization:'Bearer '+await token()}});
+ if(r.status===404)return null;
+ if(!r.ok)throw await graphErr(r,'OneDrive からファイルを読めませんでした');
+ return r.blob();
+}
+async function driveDelete(path){
+ const r=await fetch(driveUrl(path),{method:'DELETE',headers:{Authorization:'Bearer '+await token()}});
+ if(!r.ok&&r.status!==404)throw await graphErr(r,'OneDrive のファイルを削除できませんでした');
+}
 async function driveUpload(path,buf,eTag){
  const r=await fetch(driveUrl(path)+':/content',{method:'PUT',headers:{Authorization:'Bearer '+await token(),'Content-Type':XLSX_MIME,'If-Match':eTag},body:buf});
  if(r.status===412)throw new ConflictError('');
@@ -2102,7 +2288,7 @@ function onLayoutChange(){
 }
 wideMQ.addEventListener('change',onLayoutChange);
 document.querySelectorAll('button').forEach(b=>b.addEventListener('dblclick',e=>e.preventDefault()));
-window.addEventListener('beforeunload',e=>{if(saving){e.preventDefault();e.returnValue=''}});
+window.addEventListener('beforeunload',e=>{if(saving||pendingUpload){e.preventDefault();e.returnValue=''}});
 (async function boot(){
  const saved=(()=>{try{return JSON.parse(lsGet('draft','null'))}catch{return null}})();
  if(saved&&saved.draft){draft=saved.draft;draftSnapshot=saved.snap||'';step=saved.step||1;document.body.dataset.step=step;show('editor');toast('入力途中の記録を復元しました')}
