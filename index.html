@@ -274,6 +274,21 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
 .chart-box.dendro.zoomed img{width:auto;height:100%;max-width:none}
 .chart-box.pca.zoomed img{width:300%;max-width:none}
 .chart-wait{padding:48px 16px;text-align:center;color:#6b6157;font-size:14px}
+.p3-tools{display:flex;flex-wrap:wrap;gap:6px;margin:0 2px 8px}
+.p3-tools .chip{min-height:36px;font-size:13px;padding:0 12px}
+.p3-tools .chip .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.p3-tools .chip.off{opacity:.4}
+.p3-box{position:relative;background:#fff;border-radius:14px;overflow:hidden}
+#p3Canvas{display:block;width:100%;touch-action:none;-webkit-user-select:none;user-select:none;cursor:grab}
+#p3Canvas:active{cursor:grabbing}
+.p3-pop{position:absolute;z-index:2;width:230px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.p3-pop .h{display:flex;align-items:center;gap:8px}
+.p3-pop .h b{flex:1;min-width:0;font-size:15px;overflow-wrap:anywhere}
+.p3-pop .h .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.p3-pop .h button{width:32px;height:32px;color:var(--sub);flex:0 0 auto}
+.p3-pop .b{display:flex;gap:10px;align-items:center;margin:6px 0 8px;font-size:13px;color:var(--sub);line-height:1.5}
+.p3-pop .b .mini{width:56px;height:56px}
+.p3-pop .btn-s{width:100%;min-height:40px}
 #upStatus{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:85;display:flex;align-items:center;gap:8px;background:#2D2419;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--fg);max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #upStatus .dot{width:8px;height:8px;border-radius:50%;background:var(--acc);animation:blink 1s infinite;flex:0 0 auto}
 #toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2D2419;border:1px solid var(--line);color:var(--fg);padding:10px 18px;border-radius:999px;font-size:14px;z-index:80;max-width:90vw;text-align:center}
@@ -569,6 +584,13 @@ body[data-step="1"] .step1,body[data-step="2"] .step2,body[data-step="3"] .step3
   <div class="chart-head"><b>PCA 2次元マップ</b><span class="sp"></span><button class="btn-s" data-zoom="pca">拡大して表示</button><button class="btn-s" data-save="pca">共有・保存</button></div>
   <div class="chart-box pca" id="boxPca"><img id="imgPca" alt="PCA 2次元マップ"></div>
  </div>
+ <div class="chart-sec">
+  <div class="chart-head"><b>PCA 3次元マップ</b><span class="sp"></span><button class="btn-s" id="p3Reset">リセット</button><button class="btn-s" id="p3Save">画像を保存</button></div>
+  <div class="p3-tools" id="p3Views"><button class="chip" data-v="12">正面（1×2）</button><button class="chip" data-v="13">1×3</button><button class="chip" data-v="23">2×3</button><button class="chip" id="p3Auto">自動回転</button><button class="chip" id="p3Names">名前を表示</button></div>
+  <div class="p3-tools" id="p3Clusters"></div>
+  <div class="p3-box" id="p3Box"><canvas id="p3Canvas" aria-label="PCA 3次元マップ（ドラッグで回転）"></canvas><div class="p3-pop hidden" id="p3Pop"></div></div>
+  <p class="tiny" style="margin:8px 2px 0">ドラッグで回転、2本指でつまむ（マウスはホイール）と拡大・縮小、ダブルタップで元の向きに戻ります。点をタップするとビールの情報を表示します。クラスタのボタンで表示・非表示を切り替えられます。</p>
+ </div>
 </section>
 
 <!-- 数値の直接入力シート -->
@@ -749,6 +771,7 @@ function fclusterMaxclust(Z,t){
 // dendrogram の葉の並び（左から）
 function dendrogramLeaves(Z){const n=Z.length+1,out=[],st=[2*n-2];while(st.length){const node=st.pop();if(node<n)out.push(node);else{st.push(Z[node-n][1]);st.push(Z[node-n][0])}}return out}
 // 主成分分析（sklearn PCA と同じ：中心化した共分散行列の固有ベクトル。向きは絶対値最大の成分を正に）
+// 第3主成分まで出す（2次元マップ・Excel は第1・第2だけを使う）
 function pca2(X){
  const n=X.length,m=X[0].length,mu=Array(m).fill(0);
  for(const r of X)r.forEach((x,j)=>mu[j]+=x/n);
@@ -757,8 +780,9 @@ function pca2(X){
  const {vals,vecs}=jacobiEigen(C);
  const ord=[...vals.keys()].sort((a,b)=>vals[b]-vals[a]);
  const total=vals.reduce((s,x)=>s+x,0);
- const comps=ord.slice(0,2).map(k=>{let v=vecs.map(row=>row[k]);const big=v.reduce((bi,x,i)=>Math.abs(x)>Math.abs(v[bi])?i:bi,0);return v[big]<0?v.map(x=>-x):v});
- return {P:X.map(r=>comps.map(v=>v.reduce((s,x,j)=>s+x*(r[j]-mu[j]),0))),explained:ord.slice(0,2).map(k=>vals[k]/total)};
+ const K=Math.min(3,m);
+ const comps=ord.slice(0,K).map(k=>{let v=vecs.map(row=>row[k]);const big=v.reduce((bi,x,i)=>Math.abs(x)>Math.abs(v[bi])?i:bi,0);return v[big]<0?v.map(x=>-x):v});
+ return {P:X.map(r=>comps.map(v=>v.reduce((s,x,j)=>s+x*(r[j]-mu[j]),0))),explained:ord.slice(0,K).map(k=>vals[k]/total)};
 }
 function jacobiEigen(A){
  const m=A.length,a=A.map(r=>r.slice()),V=[...Array(m)].map((_,i)=>Array(m).fill(0).map((_,j)=>i===j?1:0));
@@ -1166,6 +1190,7 @@ let saving=false;
 let pendingExport=null;
 
 /* ---------- 画面遷移 ---------- */
+let detailBack='list';   // 詳細画面の「＜」で戻る画面
 // 一覧を離れるときのスクロール位置。一覧に戻ったら同じ場所を表示する（iPhone 表示のとき）
 let listScroll=0;
 function show(view){
@@ -1862,6 +1887,7 @@ async function renderCharts(){
  const A=book&&book.analysis;
  $('chNote').textContent=!book?'Excelファイルが読み込まれていません。':!A?'分析できる記録がありません。':
   `最新の記録（${A.names.length}件）で描いた図です。${matchMedia('(pointer:coarse)').matches?'図を長押しすると写真に保存できます。':'図を右クリックすると画像として保存できます。'}Excel の図は「分析を再生成」するまで古いままの場合があります。`;
+ p3Show(A);
  if(charts.A===A)return;
  for(const u of Object.values(charts.urls))URL.revokeObjectURL(u);
  charts={A,urls:{},blobs:{}};
@@ -1901,6 +1927,153 @@ $('vCharts').addEventListener('click',e=>{
 $('chartsBtn').onclick=()=>show('charts');
 $('anaView').onclick=()=>show('charts');
 $('chBack').onclick=()=>{if(isWide())show('editor');else show('list')};
+
+/* ---------- PCA 3次元マップ（Canvas に自前で描く。回転・拡大・タップで情報） ---------- */
+const P3_VIEWS={'12':[[1,0,0],[0,1,0],[0,0,1]],'13':[[1,0,0],[0,0,1],[0,-1,0]],'23':[[0,1,0],[0,0,1],[1,0,0]]};   // 主成分 → 画面（右・上・手前）
+const P3_DIST=3.2;   // 視点までの距離（正規化した座標で）
+function m3(a,b){const r=[[0,0,0],[0,0,0],[0,0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)r[i][j]+=a[i][k]*b[k][j];return r}
+function rotX(t){const c=Math.cos(t),s=Math.sin(t);return [[1,0,0],[0,c,-s],[0,s,c]]}
+function rotY(t){const c=Math.cos(t),s=Math.sin(t);return [[c,0,s],[0,1,0],[-s,0,c]]}
+const p3Home=()=>m3(rotX(0.35),m3(rotY(-0.6),P3_VIEWS['12']));
+const p3={A:null,pts:[],R:p3Home(),zoom:1,hidden:new Set(),names:false,auto:false,sel:-1,raf:0,ptrs:new Map(),pinch:null,lastTap:{t:0,x:0,y:0},proj:[],W:0,H:0,dpr:1};
+// 分析結果が変わったら点を作り直す（向き・拡大はそのまま）
+function p3Show(A){
+ if(p3.A!==A){
+  p3.A=A;p3.sel=-1;p3.hidden.clear();$('p3Pop').classList.add('hidden');
+  if(A){
+   const P=A.pca.P,sc=1/Math.max(1e-9,...P.flat().map(Math.abs)),ks=A.clusters,kLo=Math.min(...ks),kHi=Math.max(...ks);
+   p3.pts=P.map((p,i)=>({d:[p[0]*sc,p[1]*sc,(p[2]||0)*sc],k:ks[i],color:clusterColor(ks[i],kLo,kHi),name:String(A.names[i]),row:A.rows[i]}));
+   const cnt={};for(const k of ks)cnt[k]=(cnt[k]||0)+1;
+   $('p3Clusters').innerHTML=Object.keys(cnt).sort((a,b)=>a-b).map(k=>`<button class="chip" data-k="${k}"><span class="dot" style="background:${clusterColor(+k,kLo,kHi)}"></span>クラスタ${k}（${cnt[k]}）</button>`).join('');
+  }else{p3.pts=[];$('p3Clusters').innerHTML=''}
+ }
+ p3Resize();
+ if(p3.auto&&!p3.raf)p3.raf=requestAnimationFrame(p3Tick);
+}
+function p3Resize(){
+ const cv=$('p3Canvas'),w=$('p3Box').clientWidth;if(!w)return;
+ const h=Math.round(Math.min(w*(isWide()?0.62:1.05),innerHeight*0.72));
+ p3.dpr=Math.min(3,devicePixelRatio||1);p3.W=w;p3.H=h;
+ cv.style.height=h+'px';cv.width=Math.round(w*p3.dpr);cv.height=Math.round(h*p3.dpr);
+ p3Draw();
+}
+// 3次元の点を画面に写す（透視投影）。z は手前が正
+function p3Project(d){
+ const R=p3.R,v=[0,1,2].map(i=>R[i][0]*d[0]+R[i][1]*d[1]+R[i][2]*d[2]);
+ const f=P3_DIST/(P3_DIST-v[2]),S=Math.min(p3.W,p3.H)*0.4*p3.zoom;
+ return {x:p3.W/2+v[0]*f*S,y:p3.H/2-v[1]*f*S,z:v[2],f};
+}
+function p3Draw(){
+ const cv=$('p3Canvas'),ctx=cv.getContext('2d'),A=p3.A,r=p3.dpr;
+ ctx.setTransform(r,0,0,r,0,0);ctx.fillStyle='#fff';ctx.fillRect(0,0,p3.W,p3.H);
+ if(!A){ctx.fillStyle='#6b6157';ctx.font=`14px ${PLOT_FONT}`;ctx.textAlign='center';ctx.fillText('分析できる記録がありません',p3.W/2,p3.H/2);return}
+ // 軸（原点を通る3本。正の側に名前）
+ ctx.font=`12px ${PLOT_FONT}`;ctx.lineWidth=1;
+ for(let j=0;j<3;j++){
+  const e=[0,0,0];e[j]=1.15;const a=p3Project(e.map(x=>-x)),b=p3Project(e);
+  ctx.strokeStyle='#9a9a9a';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([]);
+  // 軸の名前は図の内側に収める
+  const label=`主成分${j+1}（${((A.pca.explained[j]||0)*100).toFixed(1)}%）`,lw=ctx.measureText(label).width;
+  let lx=b.x<p3.W/2?b.x-4-lw:b.x+4;lx=Math.min(Math.max(4,lx),p3.W-4-lw);
+  ctx.fillStyle='#444';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(label,lx,Math.min(Math.max(10,b.y),p3.H-10));
+ }
+ // 点（奥から順に。奥ほど小さく薄く）
+ p3.proj=p3.pts.map((p,i)=>p3.hidden.has(p.k)?null:Object.assign(p3Project(p.d),{i})).filter(Boolean).sort((a,b)=>a.z-b.z);
+ ctx.font=`11px ${PLOT_FONT}`;ctx.textAlign='left';ctx.textBaseline='middle';
+ for(const q of p3.proj){
+  const p=p3.pts[q.i],rad=3.4*q.f;
+  ctx.globalAlpha=Math.min(1,Math.max(0.3,0.35+0.65*(q.z+1)/2));
+  ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(q.x,q.y,rad,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=0.6;ctx.strokeStyle='#000';ctx.stroke();
+  if(p3.names){ctx.fillStyle=p.color;ctx.fillText(p.name,q.x+rad+2,q.y)}
+ }
+ ctx.globalAlpha=1;
+ const s=p3.sel>=0&&p3.proj.find(q=>q.i===p3.sel);
+ if(s){ctx.lineWidth=2.5;ctx.strokeStyle='#F0A93B';ctx.beginPath();ctx.arc(s.x,s.y,3.4*s.f+5,0,Math.PI*2);ctx.stroke();p3PlacePop(s)}
+ else $('p3Pop').classList.add('hidden');
+}
+function p3Tick(){
+ if(!p3.auto||document.body.dataset.view!=='charts'){p3.raf=0;return}
+ if(!p3.ptrs.size){p3.R=m3(rotY(0.006),p3.R);p3Draw()}
+ p3.raf=requestAnimationFrame(p3Tick);
+}
+// タップした点の情報（名前・クラスタ・小さなレーダー・詳細へ）
+function p3OpenPop(i){
+ const p=p3.pts[i],rec=book&&book.records.find(r=>r.row===p.row);
+ p3.sel=i;
+ $('p3Pop').innerHTML=`<div class="h"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b><button aria-label="閉じる" data-x="1">✕</button></div>`+
+  `<div class="b"><span class="mini">${rec?miniRadar(rec.v):''}</span><span>クラスタ${p.k}${rec&&rec.score!=null?`<br>★ ${esc(fmtScore(rec.score))}`:''}${rec&&rec.producer?`<br>${esc(rec.producer)}`:''}</span></div>`+
+  (rec?'<button class="btn-s acc" data-open="1">詳細を見る</button>':'');
+ $('p3Pop').classList.remove('hidden');
+ p3Draw();
+}
+function p3PlacePop(q){
+ const pop=$('p3Pop'),w=pop.offsetWidth||230,h=pop.offsetHeight||150;
+ const x=Math.min(Math.max(8,q.x-w/2),p3.W-w-8),y=q.y<p3.H/2?Math.min(q.y+16,p3.H-h-8):Math.max(8,q.y-h-16);
+ pop.style.left=x+'px';pop.style.top=y+'px';
+}
+$('p3Pop').addEventListener('click',e=>{
+ if(e.target.closest('[data-x]')){p3.sel=-1;p3Draw();return}
+ if(e.target.closest('[data-open]')){
+  const rec=book&&book.records.find(r=>r.row===p3.pts[p3.sel].row);if(!rec)return;
+  if(isWide()){if(confirmDiscard())startEdit(rec)}else{detailRec=rec;detailBack='charts';show('detail')}
+ }
+});
+(function(){
+ const cv=$('p3Canvas');
+ const pos=e=>{const b=cv.getBoundingClientRect();return {x:e.clientX-b.left,y:e.clientY-b.top}};
+ const dist=()=>{const [a,b]=[...p3.ptrs.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
+ cv.addEventListener('pointerdown',e=>{
+  try{cv.setPointerCapture(e.pointerId)}catch{}
+  p3.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY,t:performance.now()});
+  if(p3.ptrs.size===2)p3.pinch={d:dist(),zoom:p3.zoom};
+  e.preventDefault();
+ });
+ cv.addEventListener('pointermove',e=>{
+  const p=p3.ptrs.get(e.pointerId);if(!p)return;
+  const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+  if(p3.ptrs.size===1)p3.R=m3(rotX(dy*0.008),m3(rotY(dx*0.008),p3.R));
+  else if(p3.pinch)p3.zoom=Math.min(6,Math.max(0.5,p3.pinch.zoom*dist()/p3.pinch.d));
+  p3Draw();e.preventDefault();
+ });
+ const end=e=>{
+  const p=p3.ptrs.get(e.pointerId);if(!p)return;
+  const wasSingle=p3.ptrs.size===1;p3.ptrs.delete(e.pointerId);if(p3.ptrs.size<2)p3.pinch=null;
+  if(e.type!=='pointerup'||!wasSingle||Math.hypot(e.clientX-p.x0,e.clientY-p.y0)>6||performance.now()-p.t>500)return;
+  // タップ：2回続けたら元の向き、1回なら近くの点を選ぶ
+  const {x,y}=pos(e),now=performance.now(),lt=p3.lastTap;
+  if(now-lt.t<320&&Math.hypot(x-lt.x,y-lt.y)<30){p3.lastTap={t:0,x:0,y:0};p3ResetView();return}
+  p3.lastTap={t:now,x,y};
+  let best=-1,bd=22;for(const q of p3.proj){const d=Math.hypot(q.x-x,q.y-y);if(d<bd){bd=d;best=q.i}}
+  if(best>=0)p3OpenPop(best);else{p3.sel=-1;p3Draw()}
+ };
+ cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+ cv.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+ cv.addEventListener('wheel',e=>{e.preventDefault();p3.zoom=Math.min(6,Math.max(0.5,p3.zoom*Math.exp(-e.deltaY*0.0015)));p3Draw()},{passive:false});
+ if(window.ResizeObserver)new ResizeObserver(()=>{if(document.body.dataset.view==='charts')p3Resize()}).observe($('p3Box'));
+})();
+function p3ResetView(){p3.R=p3Home();p3.zoom=1;p3.sel=-1;p3Draw()}
+$('p3Reset').onclick=p3ResetView;
+$('p3Views').addEventListener('click',e=>{
+ const b=e.target.closest('[data-v]');if(b){p3.R=P3_VIEWS[b.dataset.v].map(r=>r.slice());p3.zoom=1;p3Draw();return}
+ if(e.target.closest('#p3Auto')){p3.auto=!p3.auto;$('p3Auto').classList.toggle('on',p3.auto);if(p3.auto&&!p3.raf)p3.raf=requestAnimationFrame(p3Tick)}
+ if(e.target.closest('#p3Names')){p3.names=!p3.names;$('p3Names').classList.toggle('on',p3.names);p3Draw()}
+});
+$('p3Clusters').addEventListener('click',e=>{
+ const b=e.target.closest('[data-k]');if(!b)return;const k=+b.dataset.k;
+ if(p3.hidden.has(k))p3.hidden.delete(k);else p3.hidden.add(k);
+ b.classList.toggle('off',p3.hidden.has(k));
+ if(p3.sel>=0&&p3.hidden.has(p3.pts[p3.sel].k))p3.sel=-1;
+ p3Draw();
+});
+// 今の向きで画像を保存（共有シートを開けるよう、押した直後に同期的に画像を作る）
+$('p3Save').onclick=()=>{
+ if(!p3.A)return;
+ const url=$('p3Canvas').toDataURL('image/png'),bin=atob(url.split(',')[1]),u8=new Uint8Array(bin.length);
+ for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+ shareOrDownload(new File([u8],'PCA3次元マップ.png',{type:'image/png'}));
+};
 
 /* ---------- 写真 ---------- */
 const PHOTO_MAX=640,PHOTO_QUALITY=0.8;        // 元の写真：長辺 640px の JPEG
@@ -2065,7 +2238,7 @@ function renderDetail(){
  $('dtKV').innerHTML=kv.length?kv.map(([k,v])=>`<div><span class="k">${k}</span><span class="v">${esc(v)}</span></div>`).join(''):'<div><span class="k">コメント</span><span class="v" style="color:var(--sub)">なし</span></div>';
  $('dtSimilar').classList.toggle('hidden',r.cluster==null);
 }
-$('dtBack').onclick=()=>{detailRec=null;show('list')};
+$('dtBack').onclick=()=>{detailRec=null;const v=detailBack;detailBack='list';show(v)};
 $('dtEdit').onclick=()=>startEdit(detailRec);
 $('dtDup').onclick=$('dtAgain').onclick=()=>startNew(detailRec);
 $('dtSimilar').onclick=()=>{clusterFilter=detailRec.cluster;sortMode='new';query='';$('searchInput').value='';detailRec=null;listScroll=0;renderList();show('list')};
