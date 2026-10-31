@@ -1193,15 +1193,21 @@ let pendingExport=null;
 let detailBack='list';   // 詳細画面の「＜」で戻る画面
 // 一覧を離れるときのスクロール位置。一覧に戻ったら同じ場所を表示する（iPhone 表示のとき）
 let listScroll=0;
+// 3次元マップの「詳細を見る」から戻ったときは、分析の図をそのときの位置で表示する
+let chartsScroll=0,chartsReturn=false;
 function show(view){
- if(document.body.dataset.view==='list'&&view!=='list')listScroll=window.scrollY;
+ const prev=document.body.dataset.view;
+ if(prev==='list'&&view!=='list')listScroll=window.scrollY;
+ if(prev==='charts'&&view!=='charts'&&!chartsReturn)chartsScroll=window.scrollY;
  document.body.dataset.view=view;
  if(view==='editor')renderEditor();
  if(view==='detail')renderDetail();
  if(view==='settings')renderSettings();
  if(view==='charts')renderCharts();
  if(view==='list'&&!isWide()){const y=listScroll;window.scrollTo(0,y);requestAnimationFrame(()=>window.scrollTo(0,y))}
+ else if(view==='charts'&&chartsReturn){chartsReturn=false;const y=chartsScroll;window.scrollTo(0,y);requestAnimationFrame(()=>window.scrollTo(0,y))}
  else if(!isWide()||view!=='editor')window.scrollTo(0,0);
+ if(view!=='charts'&&view!=='detail'&&!(isWide()&&view==='editor'))chartsReturn=false;
 }
 function setStep(n){step=n;document.body.dataset.step=n;renderEditorChrome();window.scrollTo(0,0)}
 
@@ -2017,7 +2023,8 @@ $('p3Pop').addEventListener('click',e=>{
  if(e.target.closest('[data-x]')){p3.sel=-1;p3Draw();return}
  if(e.target.closest('[data-open]')){
   const rec=book&&book.records.find(r=>r.row===p3.pts[p3.sel].row);if(!rec)return;
-  if(isWide()){if(confirmDiscard())startEdit(rec)}else{detailRec=rec;detailBack='charts';show('detail')}
+  chartsScroll=window.scrollY;chartsReturn=true;
+  if(isWide()){if(confirmDiscard())startEdit(rec);else chartsReturn=false}else{detailRec=rec;detailBack='charts';show('detail')}
  }
 });
 (function(){
